@@ -102,6 +102,20 @@ The product shall utilize a CI/CD pipeline that supports the following:
 - prior version rollback
 - feature flags that can be flipped without a code change
 - Deployable to ad hoc test environment when needed
+- Main is always deployable. Every change that is not gated by failure deploys.
 
 ## Monitoring and Logging
 The system shall utilize logging that allows monitoring of application behavior and customer usage. Synthetic monitors shall report on issues and availability.
+
+## Load and Scale
+First version should anticipate very little usage. Build for multiple user access. Build to anticipate scale even if MCP does not achieve it. Delineate difference in scale and performance plans for MCP versus future versions.
+
+## Build For Safe Deployment Over Completed Stories
+The rule for submitting code is submit once the code is safe and feedback is possible. Some tenets on this:
+- testing behind a feature flag is a feedback
+- code being in trunk that others can sycn to is feedback
+- regression suite results is feedback
+- monitoring signals from features that are user "invisible" is feedback
+- smallest safe change possible is lower risk than lots of change all at once
+- completed integration is high risk, stabilize and deploy small changes first
+- organize code change schedule to maximize observability and testability
