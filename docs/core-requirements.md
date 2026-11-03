@@ -58,7 +58,30 @@ Admin accounts have the ability to remove all statements by a given user even wh
 ## User Experience
 The homepage experience presents the following options:
 - Discussion topics
-- "My Discussions"
+- My Discussions
 - Hot Topics
 - Discussion Trends and Stats
 - A "How to discuss" Learning Space
+
+### Sub-Page Topics
+#### Discussion Topics
+Discussions are categorized based on discussion topics. Topics are hierarchical tags in a "tag.subtag" format. The tag structure allows for navigation of different discussions.
+
+#### My Discussions
+My Discussions presents the discussions that the logged in user has participated in, or discussions where they have been mentioned or notified about.
+
+#### Hot Topics
+Hot topics includes topic categories getting the most updates on discussions in them, newest topics catories, newest discussions, and discussions getting the most likes or down votes.
+
+#### Discussion Trends and Stats
+Trends and stats give numbers on which topics are engaging at what volume, movement of topics through different status, user roles making most points, and more.
+
+#### How to Discuss Learning Spaces
+Partly instructions on how to use the site. Partly lessons on ethics and etiquette of discussion. Partly lessons on logical argument types, logical fallacy types, and how to frame or imagine an argument. The point of this section is to teach people how to use argumentation as a means of learning, discovery, and reasoning.
+
+Arguing to win at the cost of reason is consider an non-ethical practice in The Discussion. The forum may clear specific spaces where people do that for the fun of doing so, but those spaces will be clearly delineated to avoid confusion. Ethical, responsible, respectful rules of engagement are expected and the point of this forum is to teach that.
+
+### Discussion Presentation
+Structured discussions are visually discernable. A main point and its supporting points are arranged so that their logical relationship is easy to see. Refutations are similarly aligned so that how they disrupt an argument is clear.
+
+Different modes may be necessary to help different visualizations. Argument structure will be more visually oriented, shortening text for sake of the visual. Actually reading the text of an argument would be less about visual structure, even if there will need to be layout conventions used to make relationships within the argument clear.
