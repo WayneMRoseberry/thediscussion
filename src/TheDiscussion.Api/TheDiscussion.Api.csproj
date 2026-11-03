@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    REST API (application tier). Only the composition root (namespace TheDiscussion.Api.Composition)
+    may touch storage provider projects; everything else depends on the storage interfaces in
+    TheDiscussion.Core. Enforced by TheDiscussion.Architecture.Tests.
+  -->
+  <PropertyGroup>
+    <RootNamespace>TheDiscussion.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TheDiscussion.Core\TheDiscussion.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TheDiscussion.Api.Tests" />
+  </ItemGroup>
+</Project>
