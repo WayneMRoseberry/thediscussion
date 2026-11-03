@@ -85,3 +85,23 @@ Arguing to win at the cost of reason is consider an non-ethical practice in The 
 Structured discussions are visually discernable. A main point and its supporting points are arranged so that their logical relationship is easy to see. Refutations are similarly aligned so that how they disrupt an argument is clear.
 
 Different modes may be necessary to help different visualizations. Argument structure will be more visually oriented, shortening text for sake of the visual. Actually reading the text of an argument would be less about visual structure, even if there will need to be layout conventions used to make relationships within the argument clear.
+
+# Architecture
+
+## Front/Application/Storage
+The Discussion will use a three tiered architecture. The front end will be web-based. Business logic will happen in the application tier, which exposes itself to the front end via a REST API. The same REST API will allow public access, requiring accounts with private API keys. The application tier will communicate with the storage tier to retriev and persist all information about users and discussions. The storage tier will be available only to the application tier.
+
+## Storage Tier Pluggability and Extensibility
+The storage tier shall be built to be replaceable. The application tier shall be designed to be storage technology independent.
+
+## Deployment
+The product shall utilize a CI/CD pipeline that supports the following:
+- automatic deployment
+- automated checks in the CI/CD pipeline
+- blue/green checks at deployment time based on synthetic monitors on new revision
+- prior version rollback
+- feature flags that can be flipped without a code change
+- Deployable to ad hoc test environment when needed
+
+## Monitoring and Logging
+The system shall utilize logging that allows monitoring of application behavior and customer usage. Synthetic monitors shall report on issues and availability.
