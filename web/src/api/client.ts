@@ -4,6 +4,8 @@ import type {
   Discussion,
   DiscussionSummary,
   ProblemDetails,
+  TopicNode,
+  UpdateDiscussionInput,
   Statement,
 } from './types';
 
@@ -55,7 +57,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
 
-  return (await response.json()) as T;
+  // 204 No Content (deletes) has no body.
+  return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
 async function readProblem(response: Response): Promise<ProblemDetails | undefined> {
@@ -75,6 +78,15 @@ export function listDiscussions(signal?: AbortSignal): Promise<DiscussionSummary
   return request<DiscussionSummary[]>('/discussions', { signal });
 }
 
+/** Discussions tagged with `tag` or one of its sub-tags, newest first. */
+export function listDiscussionsUnderTag(tag: string, signal?: AbortSignal): Promise<DiscussionSummary[]> {
+  return request<DiscussionSummary[]>(`/discussions?tag=${encodeURIComponent(tag)}`, { signal });
+}
+
+export function getTopics(signal?: AbortSignal): Promise<TopicNode[]> {
+  return request<TopicNode[]>('/topics', { signal });
+}
+
 export function getDiscussion(id: string, signal?: AbortSignal): Promise<Discussion> {
   return request<Discussion>(`/discussions/${encodeURIComponent(id)}`, { signal });
 }
@@ -83,9 +95,32 @@ export function createDiscussion(input: CreateDiscussionInput): Promise<Discussi
   return request<Discussion>('/discussions', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export function updateDiscussion(id: string, input: UpdateDiscussionInput): Promise<Discussion> {
+  return request<Discussion>(`/discussions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+/** Deletes the discussion and all its statements. */
+export function deleteDiscussion(id: string): Promise<void> {
+  return request<void>(`/discussions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export function addStatement(discussionId: string, input: AddStatementInput): Promise<Statement> {
   return request<Statement>(`/discussions/${encodeURIComponent(discussionId)}/statements`, {
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+/** Replaces a statement's text; the server sets `editedAt`. */
+export function updateStatement(discussionId: string, statementId: string, text: string): Promise<Statement> {
+  return request<Statement>(statementPath(discussionId, statementId), { method: 'PATCH', body: JSON.stringify({ text }) });
+}
+
+/** Deletes the statement and everything beneath it. */
+export function deleteStatement(discussionId: string, statementId: string): Promise<void> {
+  return request<void>(statementPath(discussionId, statementId), { method: 'DELETE' });
+}
+
+function statementPath(discussionId: string, statementId: string): string {
+  return `/discussions/${encodeURIComponent(discussionId)}/statements/${encodeURIComponent(statementId)}`;
 }

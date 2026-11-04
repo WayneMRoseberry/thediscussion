@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { ApiError, getDiscussion } from '../api/client';
 import type { Discussion } from '../api/types';
 import { AddStatementPanel } from '../components/AddStatementPanel';
+import { DiscussionHeader } from '../components/DiscussionHeader';
 import { Outline } from '../components/Outline';
 
 type LoadState =
@@ -58,6 +59,16 @@ function useDiscussion(id: string) {
 export default function DiscussionPage() {
   const { id = '' } = useParams();
   const { state, retry, reload } = useDiscussion(id);
+  const [announcement, setAnnouncement] = useState('');
+
+  // After an add, edit or delete: announce it and reload the outline and statuses.
+  const changed = useCallback(
+    (message: string) => {
+      setAnnouncement(message);
+      reload();
+    },
+    [reload],
+  );
 
   return (
     <>
@@ -100,18 +111,17 @@ export default function DiscussionPage() {
 
       {state.status === 'loaded' && (
         <>
-          <h1>{state.discussion.title}</h1>
-          <p className="topic-tag">
-            <span className="visually-hidden">Topic: </span>
-            {state.discussion.topicTags.map((tag) => `#${tag}`).join(' ')}
+          <DiscussionHeader discussion={state.discussion} onChanged={changed} />
+          <p role="status" className="announcement">
+            {announcement}
           </p>
           <section aria-labelledby="argument-heading">
             <h2 id="argument-heading" className="visually-hidden">
               Argument
             </h2>
-            <Outline discussion={state.discussion} />
+            <Outline discussion={state.discussion} onChanged={changed} />
           </section>
-          <AddStatementPanel discussion={state.discussion} onAdded={reload} />
+          <AddStatementPanel discussion={state.discussion} onAdded={changed} />
         </>
       )}
     </>

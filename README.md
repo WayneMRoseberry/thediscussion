@@ -12,7 +12,7 @@ Application for structured discussions. Product requirements live in
 | `src/TheDiscussion.Storage.InMemory` | In-memory storage provider (local default and tests). Data is lost when the API stops. |
 | `src/TheDiscussion.Storage.Postgres` | PostgreSQL storage provider (EF Core + Npgsql) with its migrations. |
 | `tests/` | xUnit test projects: core (status engine, validation), architecture rules, storage contract suite, API integration. |
-| `web/` | React + TypeScript + Vite front end (discussion list and outline view). Talks to the API only through REST. Tests use Vitest, React Testing Library and axe. |
+| `web/` | React + TypeScript + Vite front end (discussion list, outline view with editing and deleting, topic pages). Talks to the API only through REST. Tests use Vitest, React Testing Library and axe. |
 | `.github/workflows/ci.yml` | GitHub Actions CI: .NET build and tests (with a PostgreSQL service container), web lint, type-check, tests and build. |
 
 ## Prerequisites
@@ -139,10 +139,21 @@ API first.
 
 1. Start the API (in-memory or PostgreSQL, above) in one terminal.
 2. Start the front end in another terminal.
-3. On the Discussions page, fill in *Start a discussion* (title, topic tags such as `work.remote, management`,
-   thesis) and select **Create discussion**. The new discussion opens.
+3. On the Discussions page, fill in *Start a discussion* (title, topic tags such as
+   `work.remote, management`, separated by commas or spaces, and the thesis) and select
+   **Create discussion**. The new discussion opens.
 4. Use **+ Add support group**, **+ Add support**, **+ Add illustration**, **+ Add counter** and
    **+ Add rebuttal** to build the argument. After each add, the outline and statuses refresh.
+5. Edit or delete as you go. The discussion header has **Edit** (title and tags, in place) and
+   **Delete** (the whole discussion; you return to the list). Each outline row has **Edit** for
+   statements with text, which edits the text in place, and **Delete** for every statement except the
+   thesis. Each delete asks for confirmation first and says how many statements beneath the target
+   go with it, for example "Delete this counter argument and 3 statements beneath it?". Edited
+   statements show *(edited)*. After each edit or delete, the outline and statuses refresh.
+6. Browse by topic: every tag (`#work.remote`) links to its tag page, and **Browse discussions by
+   topic** on the Discussions page opens `/topics`, the tag tree with discussion counts. A tag page
+   (`/topics/work.remote`) shows breadcrumbs for each segment (Topics > work > remote), its
+   sub-topics with counts, and the discussions at or under the tag.
 
 The discussion view is an indented outline: the thesis with its status badge (UNSUPPORTED, OPEN,
 COUNTERED or TESTED), support groups labelled ALL REQUIRED or ANY SUFFICIENT, and each statement

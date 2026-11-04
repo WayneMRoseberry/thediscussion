@@ -10,10 +10,12 @@ interface FieldProps {
   hint?: string;
   multiline?: boolean;
   disabled?: boolean;
+  /** Focus the input when it first appears (used when an edit form opens in place). */
+  autoFocus?: boolean;
 }
 
 /** A labelled text input or textarea with an optional hint and an error message tied to it for assistive tech. */
-export function Field({ id, label, value, onChange, error, hint, multiline, disabled }: FieldProps) {
+export function Field({ id, label, value, onChange, error, hint, multiline, disabled, autoFocus }: FieldProps) {
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
@@ -24,6 +26,7 @@ export function Field({ id, label, value, onChange, error, hint, multiline, disa
     value,
     onChange: handleChange,
     disabled,
+    autoFocus,
     'aria-invalid': error ? true : undefined,
     'aria-describedby': describedBy,
   } as const;

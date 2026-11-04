@@ -27,18 +27,50 @@ describe('DiscussionListPage', () => {
     expect(screen.queryByRole('list', { name: 'All discussions' })).not.toBeInTheDocument();
   });
 
-  it('links to each discussion', async () => {
+  it('links to each discussion and to each of its tags', async () => {
     mockApi(() => ({ status: 200, body: summaries }));
 
     renderAt('/');
 
     const list = await screen.findByRole('list', { name: 'All discussions' });
     const links = within(list).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['Remote work boosts productivity', 'Cities should ban cars']);
-    expect(links[0]).toHaveAttribute('href', '/discussions/d1');
-    expect(links[1]).toHaveAttribute('href', '/discussions/d2');
-    expect(within(list).getByText('#work.remote')).toBeInTheDocument();
-    expect(within(list).getByText('#cities.transport #environment')).toBeInTheDocument();
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Remote work boosts productivity',
+      '#work.remote',
+      'Cities should ban cars',
+      '#cities.transport',
+      '#environment',
+    ]);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/discussions/d1',
+      '/topics/work.remote',
+      '/discussions/d2',
+      '/topics/cities.transport',
+      '/topics/environment',
+    ]);
+  });
+
+  it('links to the topics page', async () => {
+    mockApi(() => ({ status: 200, body: summaries }));
+
+    renderAt('/');
+
+    expect(screen.getByRole('link', { name: 'Browse discussions by topic' })).toHaveAttribute('href', '/topics');
+  });
+
+  it('opens the tag page from a tag link', async () => {
+    mockApi(({ path }) => {
+      if (path === '/api/v1/topics') return { status: 200, body: [{ tag: 'work', name: 'work', discussionCount: 1, children: [{ tag: 'work.remote', name: 'remote', discussionCount: 1, children: [] }] }] };
+      if (path === '/api/v1/discussions?tag=work.remote') return { status: 200, body: [summaries[0]] };
+      return { status: 200, body: summaries };
+    });
+    const { user } = renderAt('/');
+
+    await user.click(await screen.findByRole('link', { name: '#work.remote' }));
+
+    expect(await screen.findByRole('heading', { level: 2, name: '1 discussion' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('work.remote');
+    expect(within(screen.getByRole('list', { name: 'Discussions under work.remote' })).getByRole('link', { name: 'Remote work boosts productivity' })).toBeInTheDocument();
   });
 
   it('shows an error with a retry that reloads', async () => {
