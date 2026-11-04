@@ -61,6 +61,42 @@ public class StorageIndependenceTests
     }
 
     [Fact]
+    public void Storage_providers_are_reached_only_through_the_composition_root()
+    {
+        // Sanity check that the rule above is not vacuous: the API assembly does reference the providers,
+        // and the types that use them are exactly those in the composition root namespace.
+        var referenced = ApiAssemblyRef.GetReferencedAssemblies().Select(reference => reference.Name).ToList();
+        Assert.Contains("TheDiscussion.Storage.InMemory", referenced);
+        Assert.Contains("TheDiscussion.Storage.Postgres", referenced);
+
+        var dependents = Types.InAssembly(ApiAssemblyRef)
+            .That()
+            .HaveDependencyOnAny(ForbiddenPrefixes)
+            .GetTypes()
+            .ToList();
+
+        Assert.NotEmpty(dependents);
+        Assert.All(dependents, type => Assert.Equal(CompositionRootNamespace, type.Namespace));
+    }
+
+    [Fact]
+    public void Storage_providers_do_not_reference_the_api()
+    {
+        var providers = new[]
+        {
+            typeof(TheDiscussion.Storage.InMemory.InMemoryDiscussionStore).Assembly,
+            typeof(TheDiscussion.Storage.Postgres.PostgresDiscussionStore).Assembly,
+        };
+
+        foreach (var provider in providers)
+        {
+            Assert.DoesNotContain(
+                provider.GetReferencedAssemblies(),
+                reference => reference.Name == ApiAssemblyRef.GetName().Name);
+        }
+    }
+
+    [Fact]
     public void Core_project_file_has_no_storage_references()
     {
         var references = ProjectReferences("src/TheDiscussion.Core/TheDiscussion.Core.csproj");

@@ -9,6 +9,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TheDiscussion.Core\TheDiscussion.Core.csproj" />
+    <!-- Storage provider projects: used only by the composition root (Composition/StorageComposition.cs). -->
+    <ProjectReference Include="..\TheDiscussion.Storage.InMemory\TheDiscussion.Storage.InMemory.csproj" />
+    <ProjectReference Include="..\TheDiscussion.Storage.Postgres\TheDiscussion.Storage.Postgres.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="TheDiscussion.Api.Tests" />

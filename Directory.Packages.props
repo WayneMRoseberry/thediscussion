@@ -7,6 +7,8 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.33" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageVersion Include="Npgsql" Version="8.0.9" />
+    <!-- Dependency injection abstractions for provider registration helpers -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <!-- Tests -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.33" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Shared storage contract suite (DiscussionStoreContract) run against every provider.
+    PostgreSQL runs need THEDISCUSSION_TEST_POSTGRES; without it those tests are skipped with a reason.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Enables diagnostic messages so the PostgreSQL skip reason shows in plain `dotnet test` output. -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TheDiscussion.Core\TheDiscussion.Core.csproj" />
+    <ProjectReference Include="..\..\src\TheDiscussion.Storage.InMemory\TheDiscussion.Storage.InMemory.csproj" />
+    <ProjectReference Include="..\..\src\TheDiscussion.Storage.Postgres\TheDiscussion.Storage.Postgres.csproj" />
+  </ItemGroup>
+</Project>

@@ -3,24 +3,27 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace TheDiscussion.Api.Health;
 
-/// <summary>Writes the <c>GET /health</c> body as JSON: overall status plus one entry per check.</summary>
+/// <summary>
+/// Writes the <c>GET /health</c> body, for example
+/// <c>{"status":"healthy","storage":{"provider":"InMemory","reachable":true}}</c>.
+/// The status code is 200 when healthy and 503 when storage is unreachable.
+/// </summary>
 internal static class HealthResponseWriter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static Task WriteAsync(HttpContext context, HealthReport report)
     {
+        report.Entries.TryGetValue("storage", out var storage);
         var body = new
         {
             status = StatusName(report.Status),
-            checks = report.Entries.ToDictionary(
-                entry => entry.Key,
-                entry => new
-                {
-                    status = StatusName(entry.Value.Status),
-                    description = entry.Value.Description,
-                    data = entry.Value.Data,
-                }),
+            storage = new
+            {
+                provider = storage.Data?.GetValueOrDefault("provider"),
+                reachable = storage.Data?.GetValueOrDefault("reachable") as bool? ?? false,
+                description = storage.Description,
+            },
         };
 
         context.Response.ContentType = "application/json; charset=utf-8";

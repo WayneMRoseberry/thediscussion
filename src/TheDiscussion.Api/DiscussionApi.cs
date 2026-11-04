@@ -20,7 +20,8 @@ public static class DiscussionApi
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         });
-        builder.Services.AddHealthChecks();
+        builder.Services.AddHealthChecks()
+            .AddCheck<StorageHealthCheck>("storage", timeout: TimeSpan.FromSeconds(5));
 
         return builder;
     }
