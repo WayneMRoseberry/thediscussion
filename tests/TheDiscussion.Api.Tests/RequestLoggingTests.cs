@@ -43,6 +43,21 @@ public class RequestLoggingTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(RequestLogCategory, json.RootElement.GetProperty("Category").GetString());
     }
 
+    [Fact]
+    public async Task Request_entry_uses_the_route_template_not_the_raw_path()
+    {
+        using var client = factory.CreateClient();
+        var id = Guid.NewGuid();
+
+        using var response = await client.GetAsync($"/api/v1/discussions/{id}");
+
+        var entry = await WaitForRequestEntry(entry =>
+            Equals(entry.Fields.GetValueOrDefault("Route"), "/api/v1/discussions/{id:guid}")
+            && Equals(entry.Fields.GetValueOrDefault("StatusCode"), 404));
+        Assert.Equal("GET", entry.Fields["Method"]);
+        Assert.DoesNotContain(id.ToString(), (string)entry.Fields["Route"]!);
+    }
+
     private async Task<CapturedLogEntry> WaitForRequestEntry(Func<CapturedLogEntry, bool> predicate)
     {
         // The middleware logs in a finally block after the response is produced; allow it a moment.

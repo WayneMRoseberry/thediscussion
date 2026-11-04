@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using TheDiscussion.Api.Discussions;
 using TheDiscussion.Api.Health;
 using TheDiscussion.Api.Logging;
+using TheDiscussion.Core.Discussions;
 
 namespace TheDiscussion.Api;
 
@@ -23,6 +25,9 @@ public static class DiscussionApi
         builder.Services.AddHealthChecks()
             .AddCheck<StorageHealthCheck>("storage", timeout: TimeSpan.FromSeconds(5));
 
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddScoped<DiscussionService>();
+
         return builder;
     }
 
@@ -33,6 +38,7 @@ public static class DiscussionApi
         app.UseStatusCodePages();
 
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = HealthResponseWriter.WriteAsync });
+        app.MapDiscussionEndpoints();
 
         return app;
     }

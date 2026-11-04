@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheDiscussion.Storage.Postg
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheDiscussion.Storage.Tests", "tests\TheDiscussion.Storage.Tests\TheDiscussion.Storage.Tests.csproj", "{5E1F5541-20EE-4C59-B55F-B785BA99DE6C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheDiscussion.Core.Tests", "tests\TheDiscussion.Core.Tests\TheDiscussion.Core.Tests.csproj", "{82B60E58-FFF6-4964-86C7-4DB9D3367B36}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,6 +60,10 @@ Global
 		{5E1F5541-20EE-4C59-B55F-B785BA99DE6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E1F5541-20EE-4C59-B55F-B785BA99DE6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5E1F5541-20EE-4C59-B55F-B785BA99DE6C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{82B60E58-FFF6-4964-86C7-4DB9D3367B36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82B60E58-FFF6-4964-86C7-4DB9D3367B36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82B60E58-FFF6-4964-86C7-4DB9D3367B36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82B60E58-FFF6-4964-86C7-4DB9D3367B36}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{9EB216F7-2139-4E31-8159-4C9F851B67ED} = {193F6B21-B7F4-4A88-B1E0-478D6491D36F}
@@ -67,5 +73,6 @@ Global
 		{72D79C1C-B951-46DD-A6AE-BC83CE7E8264} = {193F6B21-B7F4-4A88-B1E0-478D6491D36F}
 		{8C5610D4-D4AC-4D9B-83C2-DCFDF759E085} = {193F6B21-B7F4-4A88-B1E0-478D6491D36F}
 		{5E1F5541-20EE-4C59-B55F-B785BA99DE6C} = {AB568CC3-EACC-42E5-B44B-C77A0B1450FA}
+		{82B60E58-FFF6-4964-86C7-4DB9D3367B36} = {AB568CC3-EACC-42E5-B44B-C77A0B1450FA}
 	EndGlobalSection
 EndGlobal

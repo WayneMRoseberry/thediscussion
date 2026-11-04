@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TheDiscussion.Core\TheDiscussion.Core.csproj" />
+    <ProjectReference Include="..\..\src\TheDiscussion.Storage.InMemory\TheDiscussion.Storage.InMemory.csproj" />
+  </ItemGroup>
+</Project>
