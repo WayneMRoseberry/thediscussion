@@ -158,10 +158,32 @@ internal static class DiscussionEndpoints
         }
     }
 
-    private static async Task<IResult> ListAsync(DiscussionService service, CancellationToken cancellationToken)
+    /// <summary><c>GET /api/v1/discussions[?tag=work]</c>: all discussions, or those under one tag (the tag or its sub-tags).</summary>
+    private static async Task<IResult> ListAsync(HttpRequest request, DiscussionService service, CancellationToken cancellationToken)
     {
-        var discussions = await service.ListDiscussionsAsync(cancellationToken);
-        return TypedResults.Ok(discussions.Select(DiscussionSummaryResponse.From).ToList());
+        try
+        {
+            IReadOnlyList<DiscussionSummary> discussions;
+            if (request.Query.TryGetValue("tag", out var tags))
+            {
+                if (tags.Count != 1)
+                {
+                    return Invalid(new Dictionary<string, string[]> { ["tag"] = ["Send one tag."] });
+                }
+
+                discussions = await service.ListDiscussionsUnderTagAsync(tags[0], cancellationToken);
+            }
+            else
+            {
+                discussions = await service.ListDiscussionsAsync(cancellationToken);
+            }
+
+            return TypedResults.Ok(discussions.Select(DiscussionSummaryResponse.From).ToList());
+        }
+        catch (DiscussionValidationException invalid)
+        {
+            return Invalid(invalid.Errors);
+        }
     }
 
     private static async Task<IResult> CreateAsync(

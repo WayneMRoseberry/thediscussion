@@ -66,6 +66,7 @@ in local and test environments.
 | Method and route | Body | Result |
 | --- | --- | --- |
 | `GET /api/v1/discussions` | | 200, `[{ id, title, topicTags, createdAt }]`, most recent first |
+| `GET /api/v1/discussions?tag={tag}` | | 200, the discussions with a tag equal to `{tag}` or under it (`{tag}.…`), each once, most recent first; 400 naming `tag` for a malformed tag |
 | `POST /api/v1/discussions` | `{ title, topicTags, thesis }` | 201 with the discussion, or 400 |
 | `GET /api/v1/discussions/{id}` | | 200 with the full tree and computed status, or 404 |
 | `PATCH /api/v1/discussions/{id}` | `{ title?, topicTags? }` | 200 with the updated discussion, 400, or 404. Only the fields sent change |
@@ -73,6 +74,7 @@ in local and test environments.
 | `POST /api/v1/discussions/{id}/statements` | `{ kind, parentId, text?, groupType? }` | 201 with the statement, 400, or 404 |
 | `PATCH /api/v1/discussions/{id}/statements/{statementId}` | `{ text }` | 200 with the statement (`editedAt` set), 400, or 404 |
 | `DELETE /api/v1/discussions/{id}/statements/{statementId}` | | 204 (the statement and everything beneath it are removed), 400 for the thesis, or 404 |
+| `GET /api/v1/topics` | | 200, the tag tree: `[{ tag, name, discussionCount, children }]` |
 | `GET /health` | | 200 (`storage.reachable: true`) or 503 |
 
 Limits: title 1–200 characters, statement text 1–5000 characters (leading and trailing whitespace
@@ -81,6 +83,13 @@ is trimmed), `topicTags` 1–5 distinct tags, each 1–5 dot-separated lowercase
 duplicate or a malformed tag is rejected with 400 naming `topicTags`. `topicTags` replaced the
 single `topicTag` field; discussions stored before the change have a one-item list holding their
 old tag.
+
+Topics: tags exist only through discussions. Filtering by tag matches whole segments, so
+`?tag=work` matches `work` and `work.remote` but not `workshop`, and a valid tag nobody uses
+returns an empty list. In `GET /api/v1/topics` each node has its full `tag`, its last segment as
+`name`, `discussionCount` (distinct discussions tagged with it or any sub-tag, so a discussion
+tagged `work.remote` and `work.hours` counts once for `work`) and its `children` sorted by name. A
+segment used only as a prefix (`work` when only `work.remote` is used) is still a node.
 
 Editing and deleting: any statement with text (every kind except support groups, including the
 thesis) can be edited at any time, even with statements attached beneath it. An edit replaces the

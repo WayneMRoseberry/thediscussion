@@ -1,5 +1,6 @@
 using TheDiscussion.Core.Status;
 using TheDiscussion.Core.Storage;
+using TheDiscussion.Core.Topics;
 
 namespace TheDiscussion.Core.Discussions;
 
@@ -56,6 +57,27 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
 
     public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsAsync(CancellationToken cancellationToken = default) =>
         store.ListDiscussionsAsync(cancellationToken);
+
+    /// <summary>Discussions tagged with <paramref name="tag"/> or one of its sub-tags, each once, most recent first.</summary>
+    /// <exception cref="DiscussionValidationException">The tag is malformed (field <c>tag</c>).</exception>
+    public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsUnderTagAsync(string? tag, CancellationToken cancellationToken = default)
+    {
+        var trimmed = tag?.Trim();
+        if (!DiscussionRules.IsValidTopicTag(trimmed))
+        {
+            var errors = new ValidationErrors();
+            errors.Add(
+                "tag",
+                $"Tag must be 1 to {DiscussionRules.TopicTagMaxSegments} dot-separated segments of lowercase letters, digits or hyphens, for example 'work.remote'.");
+            ThrowIfInvalid(errors);
+        }
+
+        return store.ListDiscussionsUnderTagAsync(trimmed!, cancellationToken);
+    }
+
+    /// <summary>The topic hierarchy built from every discussion's tags, with distinct-discussion counts.</summary>
+    public async Task<IReadOnlyList<TopicNode>> GetTopicsAsync(CancellationToken cancellationToken = default) =>
+        TopicTree.Build(await store.ListDiscussionsAsync(cancellationToken));
 
     /// <returns>The discussion with its status, or <c>null</c> when it does not exist.</returns>
     public async Task<DiscussionWithStatus?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)

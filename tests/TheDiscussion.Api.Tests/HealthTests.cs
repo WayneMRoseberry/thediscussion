@@ -54,6 +54,9 @@ public class HealthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsUnderTagAsync(string tag, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<Discussion?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

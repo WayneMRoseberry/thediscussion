@@ -207,6 +207,56 @@ public abstract class DiscussionStoreContract
         Assert.Equal([twoThesis], storedTwo!.Statements);
     }
 
+    // ---- Tag filtering (discussion-crud-and-tags AC-5) ----
+
+    [SkippableFact]
+    public async Task Listing_under_a_tag_returns_the_tag_and_its_sub_tags_once_each_most_recent_first()
+    {
+        var store = CreateStore();
+        var root = UniqueTagRoot();
+        var (exact, exactThesis) = NewDiscussion("Exact", root);
+        var (child, childThesis) = NewDiscussion("Child", $"{root}.remote");
+        var (grandchild, grandchildThesis) = NewDiscussion("Grandchild", "other", $"{root}.remote.tools");
+        var (notASegment, notASegmentThesis) = NewDiscussion("Not a segment", $"{root}s", $"{root}s.remote");
+        var (twoMatches, twoMatchesThesis) = NewDiscussion("Two matches", $"{root}.remote", $"{root}.hours");
+        var (containsOnly, containsOnlyThesis) = NewDiscussion("Contains only", $"other.{root}");
+        foreach (var (discussion, thesis) in new[]
+        {
+            (exact, exactThesis), (child, childThesis), (grandchild, grandchildThesis),
+            (notASegment, notASegmentThesis), (twoMatches, twoMatchesThesis), (containsOnly, containsOnlyThesis),
+        })
+        {
+            await store.CreateDiscussionAsync(discussion, thesis);
+        }
+
+        Assert.Equal([twoMatches, grandchild, child, exact], await store.ListDiscussionsUnderTagAsync(root));
+        Assert.Equal([twoMatches, grandchild, child], await store.ListDiscussionsUnderTagAsync($"{root}.remote"));
+        Assert.Equal([grandchild], await store.ListDiscussionsUnderTagAsync($"{root}.remote.tools"));
+        Assert.Equal([twoMatches], await store.ListDiscussionsUnderTagAsync($"{root}.hours"));
+        Assert.Equal([notASegment], await store.ListDiscussionsUnderTagAsync($"{root}s"));
+        Assert.Empty(await store.ListDiscussionsUnderTagAsync(root[..^1]));
+        Assert.Empty(await store.ListDiscussionsUnderTagAsync($"{root}.remo"));
+        Assert.Empty(await store.ListDiscussionsUnderTagAsync($"{root}.unused"));
+    }
+
+    [SkippableFact]
+    public async Task Tag_listing_follows_tag_changes_and_deletes()
+    {
+        var store = CreateStore();
+        var root = UniqueTagRoot();
+        var (moved, movedThesis) = NewDiscussion("Moved", $"{root}.before");
+        var (deleted, deletedThesis) = NewDiscussion("Deleted", $"{root}.before");
+        await store.CreateDiscussionAsync(moved, movedThesis);
+        await store.CreateDiscussionAsync(deleted, deletedThesis);
+
+        await store.UpdateDiscussionAsync(moved.Id, moved.Title, [$"{root}.after"]);
+        await store.DeleteDiscussionAsync(deleted.Id);
+
+        Assert.Empty(await store.ListDiscussionsUnderTagAsync($"{root}.before"));
+        Assert.Equal([moved.Id], (await store.ListDiscussionsUnderTagAsync(root)).Select(d => d.Id));
+        Assert.Equal([$"{root}.after"], (await store.ListDiscussionsUnderTagAsync($"{root}.after")).Single().TopicTags);
+    }
+
     // ---- Update and delete (discussion-crud-and-tags AC-1 to AC-3) ----
 
     [SkippableFact]
@@ -393,6 +443,9 @@ public abstract class DiscussionStoreContract
 
         Assert.Equal([oneThesis, counter], (await store.GetDiscussionAsync(one.Id))!.Statements);
     }
+
+    /// <summary>A top-level tag no other test uses, so tag queries only see this test's discussions.</summary>
+    protected static string UniqueTagRoot() => $"t{Guid.NewGuid():N}";
 
     /// <summary>Current UTC time at microsecond precision (the precision PostgreSQL stores).</summary>
     protected static DateTimeOffset Now()

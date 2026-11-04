@@ -39,6 +39,19 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
         return await SummariesAsync(context.Discussions, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsUnderTagAsync(string tag, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        var subTagPrefix = tag + ".";
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+        // EXISTS over the discussion's tags, so a discussion with several matching tags is listed once. StartsWith
+        // becomes an escaped LIKE 'tag.%', which the text_pattern_ops index on discussion_topic_tags.tag serves.
+        return await SummariesAsync(
+            context.Discussions.Where(d => d.TopicTags.Any(t => t.Tag == tag || t.Tag.StartsWith(subTagPrefix))),
+            cancellationToken);
+    }
+
     public async Task<Discussion?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);

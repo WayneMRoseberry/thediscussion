@@ -51,6 +51,20 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
         }
     }
 
+    public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsUnderTagAsync(string tag, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        lock (gate)
+        {
+            IReadOnlyList<DiscussionSummary> result = discussions.Values
+                .Where(stored => stored.Summary.TopicTags.Any(topicTag => DiscussionRules.IsAtOrUnder(topicTag, tag)))
+                .OrderByDescending(stored => stored.Sequence)
+                .Select(stored => stored.Summary)
+                .ToList();
+            return Task.FromResult(result);
+        }
+    }
+
     public Task<Discussion?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)
     {
         lock (gate)

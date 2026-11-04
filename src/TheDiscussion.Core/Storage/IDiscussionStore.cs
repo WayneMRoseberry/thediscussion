@@ -19,6 +19,13 @@ public interface IDiscussionStore
     /// <summary>All discussions, most recently created first.</summary>
     Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The discussions with at least one tag equal to <paramref name="tag"/> or starting with <paramref name="tag"/>
+    /// followed by a dot (a sub-tag), each listed once, most recently created first. Only whole segments match:
+    /// <c>wor</c> does not match <c>work</c>. The caller passes a well-formed tag.
+    /// </summary>
+    Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsUnderTagAsync(string tag, CancellationToken cancellationToken = default);
+
     /// <summary>The discussion with all its statements in creation order, or <c>null</c> when it does not exist.</summary>
     Task<Discussion?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default);
 
