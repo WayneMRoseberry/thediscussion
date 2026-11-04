@@ -72,6 +72,10 @@ namespace TheDiscussion.Storage.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("discussion_id");
 
+                    b.Property<DateTimeOffset?>("EditedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("edited_at");
+
                     b.Property<string>("GroupType")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
@@ -124,7 +128,7 @@ namespace TheDiscussion.Storage.Postgres.Migrations
                     b.HasOne("TheDiscussion.Storage.Postgres.StatementEntity", null)
                         .WithMany()
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("TheDiscussion.Storage.Postgres.DiscussionEntity", b =>

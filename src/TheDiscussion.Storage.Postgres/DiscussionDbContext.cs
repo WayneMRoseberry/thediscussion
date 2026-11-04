@@ -39,12 +39,14 @@ public sealed class DiscussionDbContext(DbContextOptions<DiscussionDbContext> op
             statement.Property(s => s.Text).HasColumnName("text").HasMaxLength(5000);
             statement.Property(s => s.GroupType).HasColumnName("group_type").HasConversion<string>().HasMaxLength(32);
             statement.Property(s => s.CreatedAt).HasColumnName("created_at");
+            statement.Property(s => s.EditedAt).HasColumnName("edited_at");
             statement.Property(s => s.Sequence).HasColumnName("sequence").UseIdentityAlwaysColumn();
 
+            // Deleting a statement removes everything beneath it, at any depth, within the same SQL statement (atomic).
             statement.HasOne<StatementEntity>()
                 .WithMany()
                 .HasForeignKey(s => s.ParentId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade);
 
             statement.HasIndex(s => new { s.DiscussionId, s.Sequence });
 

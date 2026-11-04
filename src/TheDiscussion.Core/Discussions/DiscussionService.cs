@@ -12,6 +12,19 @@ public sealed record NewDiscussion(string? Title, string? TopicTag, string? Thes
 /// </summary>
 public sealed record NewStatement(StatementKind? Kind, Guid? ParentId, string? Text, SupportGroupType? GroupType);
 
+/// <summary>
+/// Changes to a discussion's details. Only the fields marked as sent are changed; a sent field is validated as on create.
+/// Field names in validation errors: <c>title</c>, <c>topicTag</c>.
+/// </summary>
+public sealed record DiscussionChanges(bool TitleSent, string? Title, bool TopicTagSent, string? TopicTag)
+{
+    public static DiscussionChanges None { get; } = new(false, null, false, null);
+
+    public DiscussionChanges WithTitle(string? title) => this with { TitleSent = true, Title = title };
+
+    public DiscussionChanges WithTopicTag(string? topicTag) => this with { TopicTagSent = true, TopicTag = topicTag };
+}
+
 /// <summary>A discussion together with its freshly computed status.</summary>
 public sealed record DiscussionWithStatus(Discussion Discussion, ArgumentStatus Status);
 
@@ -29,17 +42,7 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
         var errors = new ValidationErrors();
         var title = errors.RequireText("title", input.Title, DiscussionRules.TitleMaxLength, "Title");
         var thesisText = errors.RequireText("thesis", input.Thesis, DiscussionRules.StatementTextMaxLength, "Thesis");
-        var topicTag = input.TopicTag?.Trim();
-        if (string.IsNullOrEmpty(topicTag))
-        {
-            errors.Add("topicTag", "Topic tag is required.");
-        }
-        else if (!DiscussionRules.IsValidTopicTag(topicTag))
-        {
-            errors.Add(
-                "topicTag",
-                $"Topic tag must be 1 to {DiscussionRules.TopicTagMaxSegments} dot-separated segments of lowercase letters, digits or hyphens, for example 'work.remote'.");
-        }
+        var topicTag = ValidateTopicTag(input.TopicTag, errors);
 
         ThrowIfInvalid(errors);
 
@@ -97,6 +100,132 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
 
         var updated = discussion with { Statements = [.. discussion.Statements, statement!] };
         return (statement!, WithStatus(updated));
+    }
+
+    /// <summary>Changes a discussion's title and/or topic tag (last write wins).</summary>
+    /// <param name="discussionId">The discussion to change.</param>
+    /// <param name="changes">The fields to change.</param>
+    /// <param name="formatErrors">Errors the caller already found while reading the request.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <returns>The updated discussion with its status.</returns>
+    /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
+    /// <exception cref="DiscussionValidationException">The input is invalid; nothing is changed.</exception>
+    public async Task<DiscussionWithStatus> UpdateDiscussionAsync(
+        Guid discussionId,
+        DiscussionChanges changes,
+        ValidationErrors? formatErrors = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+
+        var discussion = await store.GetDiscussionAsync(discussionId, cancellationToken)
+            ?? throw new DiscussionNotFoundException(discussionId);
+
+        var errors = formatErrors ?? new ValidationErrors();
+        var title = discussion.Title;
+        var topicTag = discussion.TopicTag;
+        if (changes.TitleSent)
+        {
+            title = errors.RequireText("title", changes.Title, DiscussionRules.TitleMaxLength, "Title") ?? title;
+        }
+
+        if (changes.TopicTagSent)
+        {
+            topicTag = ValidateTopicTag(changes.TopicTag, errors) ?? topicTag;
+        }
+
+        if (!changes.TitleSent && !changes.TopicTagSent && errors.IsEmpty)
+        {
+            errors.Add("body", "Send at least one field to change: title or topicTag.");
+        }
+
+        ThrowIfInvalid(errors);
+
+        if (!await store.UpdateDiscussionAsync(discussionId, title, topicTag, cancellationToken))
+        {
+            throw new DiscussionNotFoundException(discussionId);
+        }
+
+        return await GetDiscussionAsync(discussionId, cancellationToken) ?? throw new DiscussionNotFoundException(discussionId);
+    }
+
+    /// <summary>Deletes a discussion and all its statements.</summary>
+    /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
+    public async Task DeleteDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)
+    {
+        if (!await store.DeleteDiscussionAsync(discussionId, cancellationToken))
+        {
+            throw new DiscussionNotFoundException(discussionId);
+        }
+    }
+
+    /// <summary>
+    /// Replaces the text of a statement of any kind that has text, including the thesis, and marks it as edited.
+    /// Allowed whether or not anything is attached beneath it. Kind and parent never change.
+    /// </summary>
+    /// <param name="discussionId">The discussion.</param>
+    /// <param name="statementId">The statement to edit.</param>
+    /// <param name="text">The new text (field <c>text</c>).</param>
+    /// <param name="formatErrors">Errors the caller already found while reading the request.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <returns>The edited statement and the discussion's status.</returns>
+    /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
+    /// <exception cref="StatementNotFoundException">The statement is not part of the discussion.</exception>
+    /// <exception cref="DiscussionValidationException">The input is invalid; nothing is changed.</exception>
+    public async Task<(Statement Statement, DiscussionWithStatus Discussion)> EditStatementTextAsync(
+        Guid discussionId,
+        Guid statementId,
+        string? text,
+        ValidationErrors? formatErrors = null,
+        CancellationToken cancellationToken = default)
+    {
+        var discussion = await store.GetDiscussionAsync(discussionId, cancellationToken)
+            ?? throw new DiscussionNotFoundException(discussionId);
+        var statement = discussion.Statements.FirstOrDefault(s => s.Id == statementId)
+            ?? throw new StatementNotFoundException(discussionId, statementId);
+
+        var errors = formatErrors ?? new ValidationErrors();
+        string? trimmed = null;
+        if (statement.Kind == StatementKind.SupportGroup)
+        {
+            errors.Add("text", "Support groups have no text to edit.");
+        }
+        else if (!errors.Has("text"))
+        {
+            trimmed = errors.RequireText("text", text, DiscussionRules.StatementTextMaxLength, "Text");
+        }
+
+        ThrowIfInvalid(errors);
+
+        var edited = statement with { Text = trimmed, EditedAt = Now() };
+        await store.UpdateStatementTextAsync(discussionId, statementId, trimmed!, edited.EditedAt!.Value, cancellationToken);
+
+        var updated = discussion with
+        {
+            Statements = discussion.Statements.Select(s => s.Id == statementId ? edited : s).ToList(),
+        };
+        return (edited, WithStatus(updated));
+    }
+
+    /// <summary>Deletes a statement and every statement beneath it, at any depth. The thesis cannot be deleted on its own.</summary>
+    /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
+    /// <exception cref="StatementNotFoundException">The statement is not part of the discussion.</exception>
+    /// <exception cref="DiscussionValidationException">The statement is the thesis (field <c>statementId</c>); nothing is deleted.</exception>
+    public async Task DeleteStatementAsync(Guid discussionId, Guid statementId, CancellationToken cancellationToken = default)
+    {
+        var discussion = await store.GetDiscussionAsync(discussionId, cancellationToken)
+            ?? throw new DiscussionNotFoundException(discussionId);
+        var statement = discussion.Statements.FirstOrDefault(s => s.Id == statementId)
+            ?? throw new StatementNotFoundException(discussionId, statementId);
+
+        if (statement.Kind == StatementKind.Thesis)
+        {
+            var errors = new ValidationErrors();
+            errors.Add("statementId", "The thesis cannot be deleted on its own. Delete the discussion instead.");
+            ThrowIfInvalid(errors);
+        }
+
+        await store.DeleteStatementAsync(discussionId, statementId, cancellationToken);
     }
 
     private Statement? Validate(Discussion discussion, NewStatement input, ValidationErrors errors)
@@ -169,6 +298,26 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
             text,
             validKind == StatementKind.SupportGroup ? input.GroupType : null,
             Now());
+    }
+
+    private static string? ValidateTopicTag(string? value, ValidationErrors errors)
+    {
+        var topicTag = value?.Trim();
+        if (string.IsNullOrEmpty(topicTag))
+        {
+            errors.Add("topicTag", "Topic tag is required.");
+            return null;
+        }
+
+        if (!DiscussionRules.IsValidTopicTag(topicTag))
+        {
+            errors.Add(
+                "topicTag",
+                $"Topic tag must be 1 to {DiscussionRules.TopicTagMaxSegments} dot-separated segments of lowercase letters, digits or hyphens, for example 'work.remote'.");
+            return null;
+        }
+
+        return topicTag;
     }
 
     private static DiscussionWithStatus WithStatus(Discussion discussion) =>

@@ -97,11 +97,94 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
         return Task.CompletedTask;
     }
 
+    public Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, string topicTag, CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            if (!discussions.TryGetValue(discussionId, out var stored))
+            {
+                return Task.FromResult(false);
+            }
+
+            stored.Summary = stored.Summary with { Title = title, TopicTag = topicTag };
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task<bool> DeleteDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            return Task.FromResult(discussions.Remove(discussionId));
+        }
+    }
+
+    public Task UpdateStatementTextAsync(
+        Guid discussionId,
+        Guid statementId,
+        string text,
+        DateTimeOffset editedAt,
+        CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            var stored = Find(discussionId);
+            var index = stored.Statements.FindIndex(statement => statement.Id == statementId);
+            if (index < 0)
+            {
+                throw new StatementNotFoundException(discussionId, statementId);
+            }
+
+            stored.Statements[index] = stored.Statements[index] with { Text = text, EditedAt = editedAt };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteStatementAsync(Guid discussionId, Guid statementId, CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            var stored = Find(discussionId);
+            var target = stored.Statements.Find(statement => statement.Id == statementId)
+                ?? throw new StatementNotFoundException(discussionId, statementId);
+            if (target.Kind == StatementKind.Thesis)
+            {
+                throw new InvalidOperationException("The thesis cannot be deleted on its own; delete the discussion instead.");
+            }
+
+            // Collect the subtree first, then remove it in one step under the lock, so readers never see part of it.
+            var doomed = new HashSet<Guid> { statementId };
+            bool grew;
+            do
+            {
+                grew = false;
+                foreach (var statement in stored.Statements)
+                {
+                    if (statement.ParentId is { } parentId && doomed.Contains(parentId) && doomed.Add(statement.Id))
+                    {
+                        grew = true;
+                    }
+                }
+            }
+            while (grew);
+
+            stored.Statements.RemoveAll(statement => doomed.Contains(statement.Id));
+            stored.StatementIds.ExceptWith(doomed);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<bool> CanConnectAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+    /// <summary>The stored discussion; call with <see cref="gate"/> held.</summary>
+    private StoredDiscussion Find(Guid discussionId) =>
+        discussions.TryGetValue(discussionId, out var stored) ? stored : throw new DiscussionNotFoundException(discussionId);
 
     private sealed class StoredDiscussion(DiscussionSummary summary, long sequence)
     {
-        public DiscussionSummary Summary { get; } = summary;
+        public DiscussionSummary Summary { get; set; } = summary;
 
         public long Sequence { get; } = sequence;
 

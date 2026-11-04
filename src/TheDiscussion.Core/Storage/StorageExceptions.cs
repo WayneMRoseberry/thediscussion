@@ -15,3 +15,12 @@ public sealed class ParentStatementNotFoundException(Guid discussionId, Guid par
 
     public Guid ParentId { get; } = parentId;
 }
+
+/// <summary>The referenced statement does not exist in the discussion.</summary>
+public sealed class StatementNotFoundException(Guid discussionId, Guid statementId)
+    : Exception($"Statement '{statementId}' was not found in discussion '{discussionId}'.")
+{
+    public Guid DiscussionId { get; } = discussionId;
+
+    public Guid StatementId { get; } = statementId;
+}

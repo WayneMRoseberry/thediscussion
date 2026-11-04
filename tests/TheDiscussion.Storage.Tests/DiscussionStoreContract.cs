@@ -174,6 +174,193 @@ public abstract class DiscussionStoreContract
         Assert.Equal([twoThesis], storedTwo!.Statements);
     }
 
+    // ---- Update and delete (discussion-crud-and-tags AC-1 to AC-3) ----
+
+    [SkippableFact]
+    public async Task Updating_a_discussion_replaces_its_title_and_tag_and_keeps_its_statements()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Before", "contract.update");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var counter = Child(discussion.Id, StatementKind.CounterArgument, thesis.Id, "Counter");
+        await store.AddStatementAsync(counter);
+
+        var updated = await store.UpdateDiscussionAsync(discussion.Id, "After", "contract.update.after");
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.True(updated);
+        Assert.Equal(discussion with { Title = "After", TopicTag = "contract.update.after" }, stored!.ToSummary());
+        Assert.Equal([thesis, counter], stored.Statements);
+        Assert.Equal("After", (await store.ListDiscussionsAsync()).Single(d => d.Id == discussion.Id).Title);
+    }
+
+    [SkippableFact]
+    public async Task Updating_an_unknown_discussion_returns_false()
+    {
+        var store = CreateStore();
+
+        Assert.False(await store.UpdateDiscussionAsync(Guid.NewGuid(), "Title", "contract.update"));
+    }
+
+    [SkippableFact]
+    public async Task Deleting_a_discussion_removes_it_and_all_its_statements_and_nothing_else()
+    {
+        var store = CreateStore();
+        var (doomed, doomedThesis) = NewDiscussion("Doomed", "contract.delete");
+        var (kept, keptThesis) = NewDiscussion("Kept", "contract.delete");
+        await store.CreateDiscussionAsync(doomed, doomedThesis);
+        await store.CreateDiscussionAsync(kept, keptThesis);
+        var group = Group(doomed.Id, doomedThesis.Id, SupportGroupType.AllRequired);
+        var support = Child(doomed.Id, StatementKind.SupportingStatement, group.Id, "Support");
+        var counter = Child(doomed.Id, StatementKind.CounterArgument, support.Id, "Counter");
+        var rebuttal = Child(doomed.Id, StatementKind.Rebuttal, counter.Id, "Rebuttal");
+        foreach (var statement in new[] { group, support, counter, rebuttal })
+        {
+            await store.AddStatementAsync(statement);
+        }
+
+        var deleted = await store.DeleteDiscussionAsync(doomed.Id);
+
+        Assert.True(deleted);
+        Assert.Null(await store.GetDiscussionAsync(doomed.Id));
+        var ids = (await store.ListDiscussionsAsync()).Select(d => d.Id).ToList();
+        Assert.DoesNotContain(doomed.Id, ids);
+        Assert.Contains(kept.Id, ids);
+        Assert.Equal([keptThesis], (await store.GetDiscussionAsync(kept.Id))!.Statements);
+        await Assert.ThrowsAsync<DiscussionNotFoundException>(() =>
+            store.AddStatementAsync(Child(doomed.Id, StatementKind.Rebuttal, rebuttal.Id, "Too late")));
+    }
+
+    [SkippableFact]
+    public async Task Deleting_an_unknown_discussion_returns_false()
+    {
+        var store = CreateStore();
+
+        Assert.False(await store.DeleteDiscussionAsync(Guid.NewGuid()));
+    }
+
+    [SkippableFact]
+    public async Task Editing_a_statement_replaces_its_text_and_sets_edited_at_without_moving_it()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Edit", "contract.edit");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var counter = Child(discussion.Id, StatementKind.CounterArgument, thesis.Id, "Original counter");
+        var rebuttal = Child(discussion.Id, StatementKind.Rebuttal, counter.Id, "Rebuttal");
+        await store.AddStatementAsync(counter);
+        await store.AddStatementAsync(rebuttal);
+        var editedAt = Now();
+
+        await store.UpdateStatementTextAsync(discussion.Id, counter.Id, "Edited counter", editedAt);
+        await store.UpdateStatementTextAsync(discussion.Id, thesis.Id, "Edited thesis", editedAt);
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.Equal(
+            [thesis with { Text = "Edited thesis", EditedAt = editedAt }, counter with { Text = "Edited counter", EditedAt = editedAt }, rebuttal],
+            stored!.Statements);
+        Assert.Null(stored.Statements.Single(s => s.Id == rebuttal.Id).EditedAt);
+    }
+
+    [SkippableFact]
+    public async Task Editing_an_unknown_statement_or_discussion_throws_not_found()
+    {
+        var store = CreateStore();
+        var (one, oneThesis) = NewDiscussion("One", "contract.edit");
+        var (two, twoThesis) = NewDiscussion("Two", "contract.edit");
+        await store.CreateDiscussionAsync(one, oneThesis);
+        await store.CreateDiscussionAsync(two, twoThesis);
+
+        await Assert.ThrowsAsync<DiscussionNotFoundException>(() =>
+            store.UpdateStatementTextAsync(Guid.NewGuid(), oneThesis.Id, "Text", Now()));
+        await Assert.ThrowsAsync<StatementNotFoundException>(() =>
+            store.UpdateStatementTextAsync(one.Id, Guid.NewGuid(), "Text", Now()));
+        await Assert.ThrowsAsync<StatementNotFoundException>(() =>
+            store.UpdateStatementTextAsync(two.Id, oneThesis.Id, "Text", Now()));
+        Assert.Equal([oneThesis], (await store.GetDiscussionAsync(one.Id))!.Statements);
+    }
+
+    [SkippableFact]
+    public async Task Deleting_a_statement_removes_its_whole_subtree_and_leaves_the_rest_of_the_tree_intact()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Subtree", "contract.delete-subtree");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var group = Group(discussion.Id, thesis.Id, SupportGroupType.AllRequired);
+        var support = Child(discussion.Id, StatementKind.SupportingStatement, group.Id, "Doomed support");
+        var otherSupport = Child(discussion.Id, StatementKind.SupportingStatement, group.Id, "Kept support");
+        var illustration = Child(discussion.Id, StatementKind.Illustration, support.Id, "Doomed illustration");
+        var counter = Child(discussion.Id, StatementKind.CounterArgument, support.Id, "Doomed counter");
+        var rebuttal = Child(discussion.Id, StatementKind.Rebuttal, counter.Id, "Doomed rebuttal");
+        var deeper = Child(discussion.Id, StatementKind.Rebuttal, rebuttal.Id, "Doomed deeper rebuttal");
+        var otherCounter = Child(discussion.Id, StatementKind.CounterArgument, otherSupport.Id, "Kept counter");
+        var thesisCounter = Child(discussion.Id, StatementKind.CounterArgument, thesis.Id, "Kept thesis counter");
+        var added = new[] { group, support, otherSupport, illustration, counter, rebuttal, deeper, otherCounter, thesisCounter };
+        foreach (var statement in added)
+        {
+            await store.AddStatementAsync(statement);
+        }
+
+        await store.DeleteStatementAsync(discussion.Id, support.Id);
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.Equal([thesis, group, otherSupport, otherCounter, thesisCounter], stored!.Statements);
+
+        // The rest of the tree keeps working: new statements attach to survivors, never to deleted statements.
+        var newRebuttal = Child(discussion.Id, StatementKind.Rebuttal, otherCounter.Id, "New rebuttal");
+        await store.AddStatementAsync(newRebuttal);
+        await Assert.ThrowsAsync<ParentStatementNotFoundException>(() =>
+            store.AddStatementAsync(Child(discussion.Id, StatementKind.Rebuttal, rebuttal.Id, "Under a deleted rebuttal")));
+        Assert.Equal([thesis, group, otherSupport, otherCounter, thesisCounter, newRebuttal], (await store.GetDiscussionAsync(discussion.Id))!.Statements);
+    }
+
+    [SkippableFact]
+    public async Task Deleting_a_leaf_statement_removes_only_that_statement()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Leaf", "contract.delete-subtree");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var counter = Child(discussion.Id, StatementKind.CounterArgument, thesis.Id, "Counter");
+        var rebuttal = Child(discussion.Id, StatementKind.Rebuttal, counter.Id, "Rebuttal");
+        await store.AddStatementAsync(counter);
+        await store.AddStatementAsync(rebuttal);
+
+        await store.DeleteStatementAsync(discussion.Id, rebuttal.Id);
+
+        Assert.Equal([thesis, counter], (await store.GetDiscussionAsync(discussion.Id))!.Statements);
+    }
+
+    [SkippableFact]
+    public async Task Deleting_the_thesis_is_refused_and_changes_nothing()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Thesis stays", "contract.delete-subtree");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var counter = Child(discussion.Id, StatementKind.CounterArgument, thesis.Id, "Counter");
+        await store.AddStatementAsync(counter);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.DeleteStatementAsync(discussion.Id, thesis.Id));
+
+        Assert.Equal([thesis, counter], (await store.GetDiscussionAsync(discussion.Id))!.Statements);
+    }
+
+    [SkippableFact]
+    public async Task Deleting_an_unknown_statement_or_discussion_throws_not_found()
+    {
+        var store = CreateStore();
+        var (one, oneThesis) = NewDiscussion("One", "contract.delete-subtree");
+        var (two, twoThesis) = NewDiscussion("Two", "contract.delete-subtree");
+        await store.CreateDiscussionAsync(one, oneThesis);
+        await store.CreateDiscussionAsync(two, twoThesis);
+        var counter = Child(one.Id, StatementKind.CounterArgument, oneThesis.Id, "Counter");
+        await store.AddStatementAsync(counter);
+
+        await Assert.ThrowsAsync<DiscussionNotFoundException>(() => store.DeleteStatementAsync(Guid.NewGuid(), counter.Id));
+        await Assert.ThrowsAsync<StatementNotFoundException>(() => store.DeleteStatementAsync(one.Id, Guid.NewGuid()));
+        await Assert.ThrowsAsync<StatementNotFoundException>(() => store.DeleteStatementAsync(two.Id, counter.Id));
+
+        Assert.Equal([oneThesis, counter], (await store.GetDiscussionAsync(one.Id))!.Statements);
+    }
+
     /// <summary>Current UTC time at microsecond precision (the precision PostgreSQL stores).</summary>
     protected static DateTimeOffset Now()
     {

@@ -109,6 +109,69 @@ public class DiscussionServiceTests
     }
 
     [Fact]
+    public async Task Editing_text_sets_edited_at_and_leaves_the_status_unchanged()
+    {
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var id = created.Discussion.Id;
+        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
+        var (support, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));
+        var (counter, before) = await service.AddStatementAsync(id, new NewStatement(StatementKind.CounterArgument, support.Id, "Counter", null));
+
+        var (edited, after) = await service.EditStatementTextAsync(id, counter.Id, "  Sharper counter  ");
+        var read = await service.GetDiscussionAsync(id);
+
+        Assert.Equal(counter with { Text = "Sharper counter", EditedAt = edited.EditedAt }, edited);
+        Assert.NotNull(edited.EditedAt);
+        Assert.Equal(ThesisStatus.Countered, before.Status.Thesis);
+        Assert.Equal(before.Status.Thesis, after.Status.Thesis);
+        Assert.Equal(before.Status.Thesis, read!.Status.Thesis);
+        Assert.Equal(before.Status.Stands, read.Status.Stands);
+        Assert.Equal(before.Status.Refuted, read.Status.Refuted);
+        Assert.Equal(before.Status.Holds, read.Status.Holds);
+        Assert.Equal(edited, read.Discussion.Statements.Single(s => s.Id == counter.Id));
+    }
+
+    [Fact]
+    public async Task Editing_a_support_group_is_rejected()
+    {
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var (group, _) = await service.AddStatementAsync(
+            created.Discussion.Id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AnySufficient));
+
+        var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
+            service.EditStatementTextAsync(created.Discussion.Id, group.Id, "Text"));
+
+        Assert.Equal(["text"], error.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task Deleting_the_thesis_is_rejected_naming_statementId()
+    {
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+
+        var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
+            service.DeleteStatementAsync(created.Discussion.Id, created.Discussion.Thesis.Id));
+
+        Assert.Equal(["statementId"], error.Errors.Keys);
+        Assert.Single((await store.GetDiscussionAsync(created.Discussion.Id))!.Statements);
+    }
+
+    [Fact]
+    public async Task Deleting_a_counter_is_reflected_in_the_status_on_the_next_read()
+    {
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var id = created.Discussion.Id;
+        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
+        var (support, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));
+        var (counter, countered) = await service.AddStatementAsync(id, new NewStatement(StatementKind.CounterArgument, support.Id, "Counter", null));
+        Assert.Equal(ThesisStatus.Countered, countered.Status.Thesis);
+
+        await service.DeleteStatementAsync(id, counter.Id);
+
+        Assert.Equal(ThesisStatus.Open, (await service.GetDiscussionAsync(id))!.Status.Thesis);
+    }
+
+    [Fact]
     public async Task Adding_to_an_unknown_discussion_throws_not_found()
     {
         await Assert.ThrowsAsync<DiscussionNotFoundException>(() => service.AddStatementAsync(

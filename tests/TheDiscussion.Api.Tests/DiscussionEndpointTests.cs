@@ -306,19 +306,6 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
     private async Task<int> CountStatementsAsync(string id) =>
         (await api.GetDiscussionAsync(id)).GetProperty("statements").GetArrayLength();
 
-    private static async Task AssertValidationProblemAsync(HttpResponseMessage response, string field, string scenario)
-    {
-        var problem = await ReadJsonAsync(response);
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{scenario}: expected 400, got {(int)response.StatusCode} {problem}");
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(400, problem.GetProperty("status").GetInt32());
-        Assert.False(string.IsNullOrEmpty(problem.GetProperty("title").GetString()));
-        Assert.False(string.IsNullOrEmpty(problem.GetProperty("type").GetString()));
-        var errors = problem.GetProperty("errors");
-        Assert.True(errors.TryGetProperty(field, out var messages), $"{scenario}: expected an error for '{field}' in {errors}");
-        Assert.NotEqual(0, messages.GetArrayLength());
-    }
-
     private static void AssertStatement(JsonElement tree, string id, string kind, string parentId, string? text = null)
     {
         var statement = Statement(tree, id);

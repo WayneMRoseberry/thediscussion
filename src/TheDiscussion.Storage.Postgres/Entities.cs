@@ -34,6 +34,8 @@ internal sealed class StatementEntity
 
     public DateTimeOffset CreatedAt { get; set; }
 
+    public DateTimeOffset? EditedAt { get; set; }
+
     /// <summary>Database-generated insertion order, used to return statements in creation order.</summary>
     public long Sequence { get; set; }
 
@@ -46,7 +48,8 @@ internal sealed class StatementEntity
         Text = statement.Text,
         GroupType = statement.GroupType,
         CreatedAt = statement.CreatedAt,
+        EditedAt = statement.EditedAt,
     };
 
-    public Statement ToStatement() => new(Id, DiscussionId, Kind, ParentId, Text, GroupType, CreatedAt);
+    public Statement ToStatement() => new(Id, DiscussionId, Kind, ParentId, Text, GroupType, CreatedAt, EditedAt);
 }

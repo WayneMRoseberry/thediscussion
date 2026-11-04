@@ -58,19 +58,34 @@ with one entry per request (method, route, status code, duration).
 
 Routes are under `/api/v1`. JSON is camelCase, ids are GUIDs, and errors are RFC 7807 problem
 details (`application/problem+json`; validation errors list each offending field under `errors`).
-Write endpoints are open (no accounts yet), so only run the API in local and test environments.
+Write endpoints are open (no accounts yet): anyone who can reach the API can create, edit and delete
+any discussion or statement, including through `PATCH` and `DELETE` on
+`/api/v1/discussions/{id}` and `/api/v1/discussions/{id}/statements/{statementId}`. Only run the API
+in local and test environments.
 
 | Method and route | Body | Result |
 | --- | --- | --- |
 | `GET /api/v1/discussions` | | 200, `[{ id, title, topicTag, createdAt }]`, most recent first |
 | `POST /api/v1/discussions` | `{ title, topicTag, thesis }` | 201 with the discussion, or 400 |
 | `GET /api/v1/discussions/{id}` | | 200 with the full tree and computed status, or 404 |
+| `PATCH /api/v1/discussions/{id}` | `{ title?, topicTag? }` | 200 with the updated discussion, 400, or 404. Only the fields sent change |
+| `DELETE /api/v1/discussions/{id}` | | 204 (the discussion and all its statements are removed), or 404 |
 | `POST /api/v1/discussions/{id}/statements` | `{ kind, parentId, text?, groupType? }` | 201 with the statement, 400, or 404 |
+| `PATCH /api/v1/discussions/{id}/statements/{statementId}` | `{ text }` | 200 with the statement (`editedAt` set), 400, or 404 |
+| `DELETE /api/v1/discussions/{id}/statements/{statementId}` | | 204 (the statement and everything beneath it are removed), 400 for the thesis, or 404 |
 | `GET /health` | | 200 (`storage.reachable: true`) or 503 |
 
 Limits: title 1–200 characters, statement text 1–5000 characters (leading and trailing whitespace
 is trimmed), topic tag 1–5 dot-separated lowercase segments of `[a-z0-9-]` (for example
 `work.remote`).
+
+Editing and deleting: any statement with text (every kind except support groups, including the
+thesis) can be edited at any time, even with statements attached beneath it. An edit replaces the
+text and sets `editedAt` (`null` until the first edit); kind and parent never change, so an edit
+does not change any status. Deleting a statement is a hard delete of it and everything beneath it,
+at any depth, in one atomic operation; status is recomputed on the next read. The thesis cannot be
+deleted on its own (400 naming `statementId`): delete the discussion instead. Concurrent edits are
+last write wins; there is no edit history or undo.
 
 Statement kinds and what they may target (`parentId`):
 
