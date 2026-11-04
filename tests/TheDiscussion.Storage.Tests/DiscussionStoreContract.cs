@@ -30,6 +30,39 @@ public abstract class DiscussionStoreContract
     }
 
     [SkippableFact]
+    public async Task Several_topic_tags_are_stored_and_read_back_in_their_order()
+    {
+        var store = CreateStore();
+        string[] tags = ["work.remote", "management", "a.b.c.d.e"];
+        var (discussion, thesis) = NewDiscussion("Several tags", tags);
+
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+        var listed = (await store.ListDiscussionsAsync()).Single(d => d.Id == discussion.Id);
+
+        Assert.Equal(tags, stored!.TopicTags);
+        Assert.Equal(tags, listed.TopicTags);
+    }
+
+    [SkippableFact]
+    public async Task Updating_tags_can_reorder_shrink_and_grow_the_list()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Retag", "contract.tags.a", "contract.tags.b");
+        await store.CreateDiscussionAsync(discussion, thesis);
+
+        await store.UpdateDiscussionAsync(discussion.Id, "Retag", ["contract.tags.b", "contract.tags.a"]);
+        Assert.Equal(["contract.tags.b", "contract.tags.a"], (await store.GetDiscussionAsync(discussion.Id))!.TopicTags);
+
+        await store.UpdateDiscussionAsync(discussion.Id, "Retag", ["contract.tags.c"]);
+        Assert.Equal(["contract.tags.c"], (await store.GetDiscussionAsync(discussion.Id))!.TopicTags);
+
+        string[] five = ["contract.tags.c", "v", "w", "x", "y"];
+        await store.UpdateDiscussionAsync(discussion.Id, "Retag", five);
+        Assert.Equal(five, (await store.GetDiscussionAsync(discussion.Id))!.TopicTags);
+    }
+
+    [SkippableFact]
     public async Task Listing_includes_created_discussions_most_recent_first()
     {
         var store = CreateStore();
@@ -185,11 +218,11 @@ public abstract class DiscussionStoreContract
         var counter = Child(discussion.Id, StatementKind.CounterArgument, thesis.Id, "Counter");
         await store.AddStatementAsync(counter);
 
-        var updated = await store.UpdateDiscussionAsync(discussion.Id, "After", "contract.update.after");
+        var updated = await store.UpdateDiscussionAsync(discussion.Id, "After", ["contract.update.after", "contract.other"]);
         var stored = await store.GetDiscussionAsync(discussion.Id);
 
         Assert.True(updated);
-        Assert.Equal(discussion with { Title = "After", TopicTag = "contract.update.after" }, stored!.ToSummary());
+        Assert.Equal(discussion with { Title = "After", TopicTags = ["contract.update.after", "contract.other"] }, stored!.ToSummary());
         Assert.Equal([thesis, counter], stored.Statements);
         Assert.Equal("After", (await store.ListDiscussionsAsync()).Single(d => d.Id == discussion.Id).Title);
     }
@@ -199,7 +232,7 @@ public abstract class DiscussionStoreContract
     {
         var store = CreateStore();
 
-        Assert.False(await store.UpdateDiscussionAsync(Guid.NewGuid(), "Title", "contract.update"));
+        Assert.False(await store.UpdateDiscussionAsync(Guid.NewGuid(), "Title", ["contract.update"]));
     }
 
     [SkippableFact]
@@ -368,12 +401,12 @@ public abstract class DiscussionStoreContract
         return new DateTimeOffset(ticks - (ticks % 10), TimeSpan.Zero);
     }
 
-    protected static (DiscussionSummary Discussion, Statement Thesis) NewDiscussion(string title, string topicTag)
+    protected static (DiscussionSummary Discussion, Statement Thesis) NewDiscussion(string title, params string[] topicTags)
     {
         var id = Guid.NewGuid();
         var createdAt = Now();
         return (
-            new DiscussionSummary(id, title, topicTag, createdAt),
+            new DiscussionSummary(id, title, [.. topicTags], createdAt),
             new Statement(Guid.NewGuid(), id, StatementKind.Thesis, null, title + " (thesis)", null, createdAt));
     }
 

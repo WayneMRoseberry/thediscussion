@@ -27,9 +27,9 @@ public interface IDiscussionStore
     /// <exception cref="ParentStatementNotFoundException">The parent is not a statement of that discussion.</exception>
     Task AddStatementAsync(Statement statement, CancellationToken cancellationToken = default);
 
-    /// <summary>Replaces a discussion's title and topic tag (last write wins).</summary>
+    /// <summary>Replaces a discussion's title and topic tags (last write wins). <paramref name="topicTags"/> are 1 to 5 distinct tags, in order.</summary>
     /// <returns><c>false</c> when the discussion does not exist; nothing is changed then.</returns>
-    Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, string topicTag, CancellationToken cancellationToken = default);
+    Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, IReadOnlyList<string> topicTags, CancellationToken cancellationToken = default);
 
     /// <summary>Removes a discussion and all its statements, atomically.</summary>
     /// <returns><c>false</c> when the discussion does not exist.</returns>

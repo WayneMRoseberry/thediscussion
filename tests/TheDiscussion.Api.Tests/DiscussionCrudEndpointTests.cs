@@ -27,14 +27,14 @@ public class DiscussionCrudEndpointTests(ApiFactory factory) : IClassFixture<Api
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("After", body.GetProperty("title").GetString());
-        Assert.Equal("api.patch", body.GetProperty("topicTag").GetString());
+        Assert.Equal(["api.patch"], Tags(body));
         Assert.Equal(discussion.GetProperty("createdAt").GetString(), body.GetProperty("createdAt").GetString());
         Assert.Equal([ThesisId(discussion), counter], body.GetProperty("statements").EnumerateArray().Select(Id));
         Assert.Equal("unsupported", body.GetProperty("status").GetString());
 
         var read = await api.GetDiscussionAsync(id);
         Assert.Equal("After", read.GetProperty("title").GetString());
-        Assert.Equal("api.patch", read.GetProperty("topicTag").GetString());
+        Assert.Equal(["api.patch"], Tags(read));
     }
 
     [Fact]
@@ -42,12 +42,12 @@ public class DiscussionCrudEndpointTests(ApiFactory factory) : IClassFixture<Api
     {
         var discussion = await api.CreateDiscussionAsync(title: "Keep me", topicTag: "api.patch");
 
-        using var response = await api.PatchDiscussionAsync(Id(discussion), new { topicTag = "api.patch.tag" });
+        using var response = await api.PatchDiscussionAsync(Id(discussion), new { topicTags = new[] { "api.patch.tag", "api.other" } });
         var body = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Keep me", body.GetProperty("title").GetString());
-        Assert.Equal("api.patch.tag", body.GetProperty("topicTag").GetString());
+        Assert.Equal(["api.patch.tag", "api.other"], Tags(body));
     }
 
     [Fact]
@@ -55,13 +55,13 @@ public class DiscussionCrudEndpointTests(ApiFactory factory) : IClassFixture<Api
     {
         var discussion = await api.CreateDiscussionAsync(title: "Old", topicTag: "api.patch");
 
-        using var response = await api.PatchDiscussionAsync(Id(discussion), new { title = "New", topicTag = "api.patch.both" });
+        using var response = await api.PatchDiscussionAsync(Id(discussion), new { title = "New", topicTags = new[] { "api.patch.both" } });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var list = await api.Http.GetAsync(DiscussionsPath);
         var entry = (await ReadJsonAsync(list)).EnumerateArray().Single(item => Id(item) == Id(discussion));
         Assert.Equal("New", entry.GetProperty("title").GetString());
-        Assert.Equal("api.patch.both", entry.GetProperty("topicTag").GetString());
+        Assert.Equal(["api.patch.both"], Tags(entry));
     }
 
     public static TheoryData<string, string, string> InvalidDiscussionPatches => new()
@@ -71,9 +71,9 @@ public class DiscussionCrudEndpointTests(ApiFactory factory) : IClassFixture<Api
         { "null title", """{"title": null}""", "title" },
         { "title over 200", $$"""{"title": "{{new string('t', 201)}}"}""", "title" },
         { "title of the wrong type", """{"title": 42}""", "title" },
-        { "null tag", """{"topicTag": null}""", "topicTag" },
-        { "malformed tag", """{"topicTag": "Work..Remote"}""", "topicTag" },
-        { "valid title with a malformed tag", """{"title": "Fine", "topicTag": "a.b.c.d.e.f"}""", "topicTag" },
+        { "null tags", """{"topicTags": null}""", "topicTags" },
+        { "malformed tag", """{"topicTags": ["Work..Remote"]}""", "topicTags" },
+        { "valid title with a malformed tag", """{"title": "Fine", "topicTags": ["a.b.c.d.e.f"]}""", "topicTags" },
         { "no fields", """{}""", "body" },
         { "not an object", """["title"]""", "body" },
         { "malformed JSON", """{"title": """, "body" },
@@ -91,7 +91,7 @@ public class DiscussionCrudEndpointTests(ApiFactory factory) : IClassFixture<Api
         await AssertValidationProblemAsync(response, field, scenario);
         var read = await api.GetDiscussionAsync(Id(discussion));
         Assert.Equal("Unchanged", read.GetProperty("title").GetString());
-        Assert.Equal("api.patch.invalid", read.GetProperty("topicTag").GetString());
+        Assert.Equal(["api.patch.invalid"], Tags(read));
     }
 
     [Fact]

@@ -16,7 +16,7 @@ namespace TheDiscussion.Storage.Tests;
 /// <item><c>THEDISCUSSION_REQUIRE_POSTGRES_TESTS=true</c> (set in CI): a missing connection string fails instead of skipping.</item>
 /// </list>
 /// </summary>
-public sealed class PostgresDatabaseFixture(IMessageSink diagnostics) : IAsyncLifetime
+public class PostgresDatabaseFixture(IMessageSink diagnostics) : IAsyncLifetime
 {
     public const string ConnectionStringVariable = "THEDISCUSSION_TEST_POSTGRES";
     public const string RequireVariable = "THEDISCUSSION_REQUIRE_POSTGRES_TESTS";
@@ -59,9 +59,17 @@ public sealed class PostgresDatabaseFixture(IMessageSink diagnostics) : IAsyncLi
         contextFactory = new PooledDbContextFactory<DiscussionDbContext>(options.Options);
 
         // The schema comes from the real migrations, exactly as the API applies them.
+        if (!MigrateOnStart)
+        {
+            return;
+        }
+
         await using var context = await contextFactory.CreateDbContextAsync();
         await context.Database.MigrateAsync();
     }
+
+    /// <summary>Whether to apply every migration when the database is created. Migration tests turn this off.</summary>
+    protected virtual bool MigrateOnStart => true;
 
     public async Task DisposeAsync()
     {
@@ -81,4 +89,10 @@ public sealed class PostgresDatabaseFixture(IMessageSink diagnostics) : IAsyncLi
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
     }
+}
+
+/// <summary>A throwaway PostgreSQL database with no migrations applied, for tests that apply migrations step by step.</summary>
+public sealed class UnmigratedPostgresDatabaseFixture(IMessageSink diagnostics) : PostgresDatabaseFixture(diagnostics)
+{
+    protected override bool MigrateOnStart => false;
 }

@@ -3,8 +3,8 @@ using TheDiscussion.Core.Storage;
 
 namespace TheDiscussion.Core.Discussions;
 
-/// <summary>Input for a new discussion. Field names in validation errors: <c>title</c>, <c>topicTag</c>, <c>thesis</c>.</summary>
-public sealed record NewDiscussion(string? Title, string? TopicTag, string? Thesis);
+/// <summary>Input for a new discussion. Field names in validation errors: <c>title</c>, <c>topicTags</c>, <c>thesis</c>.</summary>
+public sealed record NewDiscussion(string? Title, IReadOnlyList<string?>? TopicTags, string? Thesis);
 
 /// <summary>
 /// Input for a new statement. Field names in validation errors: <c>kind</c>, <c>parentId</c>, <c>text</c>, <c>groupType</c>.
@@ -14,15 +14,15 @@ public sealed record NewStatement(StatementKind? Kind, Guid? ParentId, string? T
 
 /// <summary>
 /// Changes to a discussion's details. Only the fields marked as sent are changed; a sent field is validated as on create.
-/// Field names in validation errors: <c>title</c>, <c>topicTag</c>.
+/// Field names in validation errors: <c>title</c>, <c>topicTags</c>.
 /// </summary>
-public sealed record DiscussionChanges(bool TitleSent, string? Title, bool TopicTagSent, string? TopicTag)
+public sealed record DiscussionChanges(bool TitleSent, string? Title, bool TopicTagsSent, IReadOnlyList<string?>? TopicTags)
 {
     public static DiscussionChanges None { get; } = new(false, null, false, null);
 
     public DiscussionChanges WithTitle(string? title) => this with { TitleSent = true, Title = title };
 
-    public DiscussionChanges WithTopicTag(string? topicTag) => this with { TopicTagSent = true, TopicTag = topicTag };
+    public DiscussionChanges WithTopicTags(IReadOnlyList<string?>? topicTags) => this with { TopicTagsSent = true, TopicTags = topicTags };
 }
 
 /// <summary>A discussion together with its freshly computed status.</summary>
@@ -42,16 +42,16 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
         var errors = new ValidationErrors();
         var title = errors.RequireText("title", input.Title, DiscussionRules.TitleMaxLength, "Title");
         var thesisText = errors.RequireText("thesis", input.Thesis, DiscussionRules.StatementTextMaxLength, "Thesis");
-        var topicTag = ValidateTopicTag(input.TopicTag, errors);
+        var topicTags = ValidateTopicTags(input.TopicTags, errors);
 
         ThrowIfInvalid(errors);
 
         var now = Now();
-        var discussion = new DiscussionSummary(Guid.NewGuid(), title!, topicTag!, now);
+        var discussion = new DiscussionSummary(Guid.NewGuid(), title!, topicTags!, now);
         var thesis = new Statement(Guid.NewGuid(), discussion.Id, StatementKind.Thesis, null, thesisText, null, now);
         await store.CreateDiscussionAsync(discussion, thesis, cancellationToken);
 
-        return WithStatus(new Discussion(discussion.Id, discussion.Title, discussion.TopicTag, discussion.CreatedAt, [thesis]));
+        return WithStatus(new Discussion(discussion.Id, discussion.Title, discussion.TopicTags, discussion.CreatedAt, [thesis]));
     }
 
     public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsAsync(CancellationToken cancellationToken = default) =>
@@ -102,7 +102,7 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
         return (statement!, WithStatus(updated));
     }
 
-    /// <summary>Changes a discussion's title and/or topic tag (last write wins).</summary>
+    /// <summary>Changes a discussion's title and/or topic tags (last write wins).</summary>
     /// <param name="discussionId">The discussion to change.</param>
     /// <param name="changes">The fields to change.</param>
     /// <param name="formatErrors">Errors the caller already found while reading the request.</param>
@@ -123,25 +123,25 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
 
         var errors = formatErrors ?? new ValidationErrors();
         var title = discussion.Title;
-        var topicTag = discussion.TopicTag;
+        var topicTags = discussion.TopicTags;
         if (changes.TitleSent)
         {
             title = errors.RequireText("title", changes.Title, DiscussionRules.TitleMaxLength, "Title") ?? title;
         }
 
-        if (changes.TopicTagSent)
+        if (changes.TopicTagsSent)
         {
-            topicTag = ValidateTopicTag(changes.TopicTag, errors) ?? topicTag;
+            topicTags = ValidateTopicTags(changes.TopicTags, errors) ?? topicTags;
         }
 
-        if (!changes.TitleSent && !changes.TopicTagSent && errors.IsEmpty)
+        if (!changes.TitleSent && !changes.TopicTagsSent && errors.IsEmpty)
         {
-            errors.Add("body", "Send at least one field to change: title or topicTag.");
+            errors.Add("body", "Send at least one field to change: title or topicTags.");
         }
 
         ThrowIfInvalid(errors);
 
-        if (!await store.UpdateDiscussionAsync(discussionId, title, topicTag, cancellationToken))
+        if (!await store.UpdateDiscussionAsync(discussionId, title, topicTags, cancellationToken))
         {
             throw new DiscussionNotFoundException(discussionId);
         }
@@ -300,24 +300,52 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
             Now());
     }
 
-    private static string? ValidateTopicTag(string? value, ValidationErrors errors)
+    /// <summary>1 to 5 distinct, well-formed tags (each trimmed). Every problem is reported under <c>topicTags</c>.</summary>
+    /// <returns>The trimmed tags in the order given, or <c>null</c> when they are invalid.</returns>
+    private static IReadOnlyList<string>? ValidateTopicTags(IReadOnlyList<string?>? values, ValidationErrors errors)
     {
-        var topicTag = value?.Trim();
-        if (string.IsNullOrEmpty(topicTag))
+        const string Field = "topicTags";
+        if (values is null || values.Count < DiscussionRules.TopicTagsMin)
         {
-            errors.Add("topicTag", "Topic tag is required.");
+            errors.Add(Field, "At least one topic tag is required.");
             return null;
         }
 
-        if (!DiscussionRules.IsValidTopicTag(topicTag))
+        var valid = true;
+        if (values.Count > DiscussionRules.TopicTagsMax)
         {
-            errors.Add(
-                "topicTag",
-                $"Topic tag must be 1 to {DiscussionRules.TopicTagMaxSegments} dot-separated segments of lowercase letters, digits or hyphens, for example 'work.remote'.");
-            return null;
+            errors.Add(Field, $"A discussion has at most {DiscussionRules.TopicTagsMax} topic tags (it has {values.Count}).");
+            valid = false;
         }
 
-        return topicTag;
+        var tags = new List<string>(values.Count);
+        foreach (var value in values)
+        {
+            var tag = value?.Trim();
+            if (string.IsNullOrEmpty(tag))
+            {
+                errors.Add(Field, "Topic tags cannot be empty.");
+                valid = false;
+            }
+            else if (!DiscussionRules.IsValidTopicTag(tag))
+            {
+                errors.Add(
+                    Field,
+                    $"Topic tag '{tag}' must be 1 to {DiscussionRules.TopicTagMaxSegments} dot-separated segments of lowercase letters, digits or hyphens, for example 'work.remote'.");
+                valid = false;
+            }
+            else if (tags.Contains(tag, StringComparer.Ordinal))
+            {
+                errors.Add(Field, $"Topic tag '{tag}' is listed more than once.");
+                valid = false;
+            }
+            else
+            {
+                tags.Add(tag);
+            }
+        }
+
+        return valid ? tags : null;
     }
 
     private static DiscussionWithStatus WithStatus(Discussion discussion) =>

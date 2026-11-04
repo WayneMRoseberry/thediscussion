@@ -103,7 +103,7 @@ export default function DiscussionPage() {
           <h1>{state.discussion.title}</h1>
           <p className="topic-tag">
             <span className="visually-hidden">Topic: </span>
-            {state.discussion.topicTag}
+            {state.discussion.topicTags.map((tag) => `#${tag}`).join(' ')}
           </p>
           <section aria-labelledby="argument-heading">
             <h2 id="argument-heading" className="visually-hidden">

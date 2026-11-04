@@ -59,7 +59,7 @@ export function referenceDiscussion(): Discussion {
   return {
     id: 'd1',
     title: 'Remote work boosts productivity',
-    topicTag: 'work.remote',
+    topicTags: ['work.remote'],
     createdAt: created,
     status: 'countered',
     thesisId: 't',

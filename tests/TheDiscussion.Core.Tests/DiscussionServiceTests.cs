@@ -21,7 +21,7 @@ public class DiscussionServiceTests
     [InlineData(200)]
     public async Task Title_length_within_limits_is_accepted(int length)
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion(new string('t', length), "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion(new string('t', length), ["a.b"], "Thesis"));
 
         Assert.Equal(length, created.Discussion.Title.Length);
     }
@@ -33,7 +33,7 @@ public class DiscussionServiceTests
     public async Task Missing_title_is_rejected(string? title)
     {
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
-            service.CreateDiscussionAsync(new NewDiscussion(title, "a.b", "Thesis")));
+            service.CreateDiscussionAsync(new NewDiscussion(title, ["a.b"], "Thesis")));
 
         Assert.Equal(["title"], error.Errors.Keys);
         Assert.Empty(await store.ListDiscussionsAsync());
@@ -43,7 +43,7 @@ public class DiscussionServiceTests
     public async Task Title_over_200_characters_is_rejected()
     {
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
-            service.CreateDiscussionAsync(new NewDiscussion(new string('t', 201), "a.b", "Thesis")));
+            service.CreateDiscussionAsync(new NewDiscussion(new string('t', 201), ["a.b"], "Thesis")));
 
         Assert.Contains("title", error.Errors.Keys);
     }
@@ -51,10 +51,10 @@ public class DiscussionServiceTests
     [Fact]
     public async Task Thesis_of_5000_characters_is_accepted_and_5001_rejected()
     {
-        await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", new string('x', 5000)));
+        await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], new string('x', 5000)));
 
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
-            service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", new string('x', 5001))));
+            service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], new string('x', 5001))));
 
         Assert.Equal(["thesis"], error.Errors.Keys);
     }
@@ -63,25 +63,25 @@ public class DiscussionServiceTests
     public async Task Every_invalid_field_is_reported_at_once()
     {
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
-            service.CreateDiscussionAsync(new NewDiscussion(null, "Not A Tag", null)));
+            service.CreateDiscussionAsync(new NewDiscussion(null, ["Not A Tag"], null)));
 
-        Assert.Equal(new[] { "thesis", "title", "topicTag" }, error.Errors.Keys.Order());
+        Assert.Equal(new[] { "thesis", "title", "topicTags" }, error.Errors.Keys.Order());
     }
 
     [Fact]
     public async Task Text_is_trimmed_before_it_is_stored()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("  Title  ", " work.remote ", "  Thesis  "));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("  Title  ", [" work.remote "], "  Thesis  "));
 
         Assert.Equal("Title", created.Discussion.Title);
-        Assert.Equal("work.remote", created.Discussion.TopicTag);
+        Assert.Equal(["work.remote"], created.Discussion.TopicTags);
         Assert.Equal("Thesis", created.Discussion.Thesis.Text);
     }
 
     [Fact]
     public async Task Status_is_recomputed_from_the_stored_tree_on_every_read()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var id = created.Discussion.Id;
         Assert.Equal(ThesisStatus.Unsupported, created.Status.Thesis);
 
@@ -98,7 +98,7 @@ public class DiscussionServiceTests
     [Fact]
     public async Task Statement_text_of_5001_characters_is_rejected_and_nothing_is_stored()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
 
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() => service.AddStatementAsync(
             created.Discussion.Id,
@@ -111,7 +111,7 @@ public class DiscussionServiceTests
     [Fact]
     public async Task Editing_text_sets_edited_at_and_leaves_the_status_unchanged()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var id = created.Discussion.Id;
         var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
         var (support, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));
@@ -134,7 +134,7 @@ public class DiscussionServiceTests
     [Fact]
     public async Task Editing_a_support_group_is_rejected()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var (group, _) = await service.AddStatementAsync(
             created.Discussion.Id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AnySufficient));
 
@@ -147,7 +147,7 @@ public class DiscussionServiceTests
     [Fact]
     public async Task Deleting_the_thesis_is_rejected_naming_statementId()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
 
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
             service.DeleteStatementAsync(created.Discussion.Id, created.Discussion.Thesis.Id));
@@ -159,7 +159,7 @@ public class DiscussionServiceTests
     [Fact]
     public async Task Deleting_a_counter_is_reflected_in_the_status_on_the_next_read()
     {
-        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", "a.b", "Thesis"));
+        var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var id = created.Discussion.Id;
         var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
         var (support, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));

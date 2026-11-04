@@ -4,8 +4,8 @@ using TheDiscussion.Core.Status;
 
 namespace TheDiscussion.Api.Discussions;
 
-/// <summary><c>POST /api/v1/discussions</c> body.</summary>
-public sealed record CreateDiscussionRequest(string? Title, string? TopicTag, string? Thesis);
+/// <summary><c>POST /api/v1/discussions</c> body. <c>topicTags</c> holds 1 to 5 distinct tags, for example <c>["work.remote", "management"]</c>.</summary>
+public sealed record CreateDiscussionRequest(string? Title, IReadOnlyList<string?>? TopicTags, string? Thesis);
 
 /// <summary>
 /// <c>POST /api/v1/discussions/{id}/statements</c> body. <c>kind</c> is one of <c>supportGroup</c>,
@@ -15,14 +15,14 @@ public sealed record CreateDiscussionRequest(string? Title, string? TopicTag, st
 public sealed record AddStatementRequest(string? Kind, string? ParentId, string? Text, string? GroupType);
 
 // PATCH bodies are read field by field (DiscussionEndpoints), so a field that is absent can be told apart from one sent as null:
-// PATCH /api/v1/discussions/{id}                         { title?, topicTag? }  only the fields sent change
-// PATCH /api/v1/discussions/{id}/statements/{statementId} { text }               kind and parent never change
+// PATCH /api/v1/discussions/{id}                         { title?, topicTags? }  only the fields sent change
+// PATCH /api/v1/discussions/{id}/statements/{statementId} { text }                kind and parent never change
 
 /// <summary>An entry of <c>GET /api/v1/discussions</c>.</summary>
-public sealed record DiscussionSummaryResponse(Guid Id, string Title, string TopicTag, DateTimeOffset CreatedAt)
+public sealed record DiscussionSummaryResponse(Guid Id, string Title, IReadOnlyList<string> TopicTags, DateTimeOffset CreatedAt)
 {
     public static DiscussionSummaryResponse From(DiscussionSummary summary) =>
-        new(summary.Id, summary.Title, summary.TopicTag, summary.CreatedAt);
+        new(summary.Id, summary.Title, summary.TopicTags, summary.CreatedAt);
 }
 
 /// <summary>
@@ -32,7 +32,7 @@ public sealed record DiscussionSummaryResponse(Guid Id, string Title, string Top
 public sealed record DiscussionResponse(
     Guid Id,
     string Title,
-    string TopicTag,
+    IReadOnlyList<string> TopicTags,
     DateTimeOffset CreatedAt,
     ThesisStatus Status,
     Guid ThesisId,
@@ -44,7 +44,7 @@ public sealed record DiscussionResponse(
         return new DiscussionResponse(
             discussion.Id,
             discussion.Title,
-            discussion.TopicTag,
+            discussion.TopicTags,
             discussion.CreatedAt,
             status.Thesis,
             discussion.Thesis.Id,

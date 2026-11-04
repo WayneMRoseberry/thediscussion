@@ -60,7 +60,7 @@ public class HealthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         public Task AddStatementAsync(Statement statement, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, string topicTag, CancellationToken cancellationToken = default) =>
+        public Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, IReadOnlyList<string> topicTags, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<bool> DeleteDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default) =>

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { ApiError, createDiscussion, listDiscussions } from '../api/client';
 import type { DiscussionSummary } from '../api/types';
 import { Field } from '../components/Field';
+import { parseTags } from '../tags/tags';
 
 type ListState =
   | { status: 'loading' }
@@ -66,7 +67,7 @@ export default function DiscussionListPage() {
               <Link to={`/discussions/${discussion.id}`}>{discussion.title}</Link>{' '}
               <span className="topic-tag">
                 <span className="visually-hidden">Topic: </span>
-                {discussion.topicTag}
+                {discussion.topicTags.map((tag) => `#${tag}`).join(' ')}
               </span>
             </li>
           ))}
@@ -81,7 +82,7 @@ export default function DiscussionListPage() {
 function CreateDiscussionForm() {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
-  const [topicTag, setTopicTag] = useState('');
+  const [topicTags, setTopicTags] = useState('');
   const [thesis, setThesis] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -91,7 +92,7 @@ function CreateDiscussionForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const created = await createDiscussion({ title, topicTag, thesis });
+      const created = await createDiscussion({ title, topicTags: parseTags(topicTags), thesis });
       navigate(`/discussions/${created.id}`);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught : new ApiError(0, 'Something went wrong. Try again.'));
@@ -112,12 +113,12 @@ function CreateDiscussionForm() {
         )}
         <Field id="title" label="Title" value={title} onChange={setTitle} error={error?.fieldError('title')} hint="Up to 200 characters." />
         <Field
-          id="topicTag"
-          label="Topic tag"
-          value={topicTag}
-          onChange={setTopicTag}
-          error={error?.fieldError('topicTag')}
-          hint="Lowercase tags separated by dots, for example work.remote."
+          id="topicTags"
+          label="Topic tags"
+          value={topicTags}
+          onChange={setTopicTags}
+          error={error?.fieldError('topicTags')}
+          hint="1 to 5 tags separated by commas or spaces. Each tag is lowercase segments separated by dots, for example work.remote."
         />
         <Field
           id="thesis"

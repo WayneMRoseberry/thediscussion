@@ -24,33 +24,25 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
         {
             Id = discussion.Id,
             Title = discussion.Title,
-            TopicTag = discussion.TopicTag,
             CreatedAt = discussion.CreatedAt,
+            TopicTags = DiscussionTopicTagEntity.From(discussion.Id, discussion.TopicTags),
             Statements = [StatementEntity.From(thesis)],
         });
 
-        // A single SaveChanges call runs in one transaction: the discussion and its thesis are stored together.
+        // A single SaveChanges call runs in one transaction: the discussion, its tags and its thesis are stored together.
         await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsAsync(CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await context.Discussions
-            .AsNoTracking()
-            .OrderByDescending(d => d.Sequence)
-            .Select(d => new DiscussionSummary(d.Id, d.Title, d.TopicTag, d.CreatedAt))
-            .ToListAsync(cancellationToken);
+        return await SummariesAsync(context.Discussions, cancellationToken);
     }
 
     public async Task<Discussion?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var discussion = await context.Discussions
-            .AsNoTracking()
-            .Where(d => d.Id == discussionId)
-            .Select(d => new { d.Id, d.Title, d.TopicTag, d.CreatedAt })
-            .SingleOrDefaultAsync(cancellationToken);
+        var discussion = (await SummariesAsync(context.Discussions.Where(d => d.Id == discussionId), cancellationToken)).SingleOrDefault();
         if (discussion is null)
         {
             return null;
@@ -65,7 +57,7 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
         return new Discussion(
             discussion.Id,
             discussion.Title,
-            discussion.TopicTag,
+            discussion.TopicTags,
             discussion.CreatedAt,
             statements.Select(s => s.ToStatement()).ToList());
     }
@@ -107,15 +99,31 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
         }
     }
 
-    public async Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, string topicTag, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateDiscussionAsync(
+        Guid discussionId,
+        string title,
+        IReadOnlyList<string> topicTags,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(topicTags);
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        // Updating the discussion row first locks it, so concurrent updates of one discussion run one after the other
+        // (last write wins) and never interleave their tag replacements.
         var updated = await context.Discussions
             .Where(d => d.Id == discussionId)
-            .ExecuteUpdateAsync(
-                set => set.SetProperty(d => d.Title, title).SetProperty(d => d.TopicTag, topicTag),
-                cancellationToken);
-        return updated > 0;
+            .ExecuteUpdateAsync(set => set.SetProperty(d => d.Title, title), cancellationToken);
+        if (updated == 0)
+        {
+            return false;
+        }
+
+        await context.TopicTags.Where(t => t.DiscussionId == discussionId).ExecuteDeleteAsync(cancellationToken);
+        context.TopicTags.AddRange(DiscussionTopicTagEntity.From(discussionId, topicTags));
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public async Task<bool> DeleteDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default)
@@ -183,6 +191,25 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
         {
             return false;
         }
+    }
+
+    /// <summary>Summaries of the given discussions, most recently created first, each with its tags in their stored order.</summary>
+    private static async Task<IReadOnlyList<DiscussionSummary>> SummariesAsync(
+        IQueryable<DiscussionEntity> discussions,
+        CancellationToken cancellationToken)
+    {
+        var rows = await discussions
+            .AsNoTracking()
+            .OrderByDescending(d => d.Sequence)
+            .Select(d => new
+            {
+                d.Id,
+                d.Title,
+                d.CreatedAt,
+                Tags = d.TopicTags.OrderBy(t => t.Position).Select(t => t.Tag).ToList(),
+            })
+            .ToListAsync(cancellationToken);
+        return rows.Select(row => new DiscussionSummary(row.Id, row.Title, row.Tags, row.CreatedAt)).ToList();
     }
 
     /// <summary>Name of the statements-to-discussions foreign key (see the migrations).</summary>

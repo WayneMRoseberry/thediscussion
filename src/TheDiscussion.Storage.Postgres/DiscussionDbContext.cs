@@ -8,6 +8,8 @@ public sealed class DiscussionDbContext(DbContextOptions<DiscussionDbContext> op
 {
     internal DbSet<DiscussionEntity> Discussions => Set<DiscussionEntity>();
 
+    internal DbSet<DiscussionTopicTagEntity> TopicTags => Set<DiscussionTopicTagEntity>();
+
     internal DbSet<StatementEntity> Statements => Set<StatementEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -18,7 +20,6 @@ public sealed class DiscussionDbContext(DbContextOptions<DiscussionDbContext> op
             discussion.HasKey(d => d.Id);
             discussion.Property(d => d.Id).HasColumnName("id").ValueGeneratedNever();
             discussion.Property(d => d.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
-            discussion.Property(d => d.TopicTag).HasColumnName("topic_tag").IsRequired();
             discussion.Property(d => d.CreatedAt).HasColumnName("created_at");
             discussion.Property(d => d.Sequence).HasColumnName("sequence").UseIdentityAlwaysColumn();
             discussion.HasIndex(d => d.Sequence).IsUnique();
@@ -26,6 +27,24 @@ public sealed class DiscussionDbContext(DbContextOptions<DiscussionDbContext> op
                 .WithOne()
                 .HasForeignKey(s => s.DiscussionId)
                 .OnDelete(DeleteBehavior.Cascade);
+            discussion.HasMany(d => d.TopicTags)
+                .WithOne()
+                .HasForeignKey(t => t.DiscussionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DiscussionTopicTagEntity>(tag =>
+        {
+            tag.ToTable("discussion_topic_tags");
+
+            // The key makes the tags of one discussion distinct.
+            tag.HasKey(t => new { t.DiscussionId, t.Tag });
+            tag.Property(t => t.DiscussionId).HasColumnName("discussion_id");
+            tag.Property(t => t.Tag).HasColumnName("tag");
+            tag.Property(t => t.Position).HasColumnName("position");
+
+            // Supports "this tag or a sub-tag" lookups: tag = @tag OR tag LIKE '@tag.%'.
+            tag.HasIndex(t => t.Tag).HasOperators("text_pattern_ops");
         });
 
         modelBuilder.Entity<StatementEntity>(statement =>

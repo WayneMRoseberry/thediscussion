@@ -14,11 +14,13 @@ internal sealed class DiscussionApiClient(HttpClient http)
     public async Task<JsonElement> CreateDiscussionAsync(
         string title = "Remote work boosts productivity",
         string topicTag = "work.remote",
-        string thesis = "Remote work boosts productivity")
+        string thesis = "Remote work boosts productivity",
+        string[]? topicTags = null)
     {
-        using var response = await Http.PostAsJsonAsync(DiscussionsPath, new { title, topicTag, thesis });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return await ReadJsonAsync(response);
+        using var response = await Http.PostAsJsonAsync(DiscussionsPath, new { title, topicTags = topicTags ?? [topicTag], thesis });
+        var json = await ReadJsonAsync(response);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, $"Expected 201 but got {(int)response.StatusCode}: {json}");
+        return json;
     }
 
     public async Task<JsonElement> GetDiscussionAsync(string id)
@@ -93,6 +95,9 @@ internal sealed class DiscussionApiClient(HttpClient http)
     public static string Id(JsonElement element) => element.GetProperty("id").GetString()!;
 
     public static string ThesisId(JsonElement discussion) => discussion.GetProperty("thesisId").GetString()!;
+
+    public static string[] Tags(JsonElement discussion) =>
+        discussion.GetProperty("topicTags").EnumerateArray().Select(tag => tag.GetString()!).ToArray();
 
     public static JsonElement Statement(JsonElement discussion, string id) =>
         discussion.GetProperty("statements").EnumerateArray().Single(statement => statement.GetProperty("id").GetString() == id);

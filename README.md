@@ -65,10 +65,10 @@ in local and test environments.
 
 | Method and route | Body | Result |
 | --- | --- | --- |
-| `GET /api/v1/discussions` | | 200, `[{ id, title, topicTag, createdAt }]`, most recent first |
-| `POST /api/v1/discussions` | `{ title, topicTag, thesis }` | 201 with the discussion, or 400 |
+| `GET /api/v1/discussions` | | 200, `[{ id, title, topicTags, createdAt }]`, most recent first |
+| `POST /api/v1/discussions` | `{ title, topicTags, thesis }` | 201 with the discussion, or 400 |
 | `GET /api/v1/discussions/{id}` | | 200 with the full tree and computed status, or 404 |
-| `PATCH /api/v1/discussions/{id}` | `{ title?, topicTag? }` | 200 with the updated discussion, 400, or 404. Only the fields sent change |
+| `PATCH /api/v1/discussions/{id}` | `{ title?, topicTags? }` | 200 with the updated discussion, 400, or 404. Only the fields sent change |
 | `DELETE /api/v1/discussions/{id}` | | 204 (the discussion and all its statements are removed), or 404 |
 | `POST /api/v1/discussions/{id}/statements` | `{ kind, parentId, text?, groupType? }` | 201 with the statement, 400, or 404 |
 | `PATCH /api/v1/discussions/{id}/statements/{statementId}` | `{ text }` | 200 with the statement (`editedAt` set), 400, or 404 |
@@ -76,8 +76,11 @@ in local and test environments.
 | `GET /health` | | 200 (`storage.reachable: true`) or 503 |
 
 Limits: title 1–200 characters, statement text 1–5000 characters (leading and trailing whitespace
-is trimmed), topic tag 1–5 dot-separated lowercase segments of `[a-z0-9-]` (for example
-`work.remote`).
+is trimmed), `topicTags` 1–5 distinct tags, each 1–5 dot-separated lowercase segments of
+`[a-z0-9-]` (for example `["work.remote", "management"]`). An empty list, more than 5 tags, a
+duplicate or a malformed tag is rejected with 400 naming `topicTags`. `topicTags` replaced the
+single `topicTag` field; discussions stored before the change have a one-item list holding their
+old tag.
 
 Editing and deleting: any statement with text (every kind except support groups, including the
 thesis) can be edited at any time, even with statements attached beneath it. An edit replaces the
@@ -127,7 +130,7 @@ API first.
 
 1. Start the API (in-memory or PostgreSQL, above) in one terminal.
 2. Start the front end in another terminal.
-3. On the Discussions page, fill in *Start a discussion* (title, topic tag such as `work.remote`,
+3. On the Discussions page, fill in *Start a discussion* (title, topic tags such as `work.remote, management`,
    thesis) and select **Create discussion**. The new discussion opens.
 4. Use **+ Add support group**, **+ Add support**, **+ Add illustration**, **+ Add counter** and
    **+ Add rebuttal** to build the argument. After each add, the outline and statuses refresh.

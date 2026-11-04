@@ -57,9 +57,9 @@ internal static class DiscussionEndpoints
             changes = changes.WithTitle(titleText);
         }
 
-        if (TryGetField(body, "topicTag", out var topicTag) && TryReadString(topicTag, "topicTag", formatErrors, out var topicTagText))
+        if (TryGetField(body, "topicTags", out var topicTags) && TryReadStringArray(topicTags, "topicTags", formatErrors, out var topicTagList))
         {
-            changes = changes.WithTopicTag(topicTagText);
+            changes = changes.WithTopicTags(topicTagList);
         }
 
         try
@@ -178,7 +178,7 @@ internal static class DiscussionEndpoints
 
         try
         {
-            var created = await service.CreateDiscussionAsync(new NewDiscussion(body!.Title, body.TopicTag, body.Thesis), cancellationToken);
+            var created = await service.CreateDiscussionAsync(new NewDiscussion(body!.Title, body.TopicTags, body.Thesis), cancellationToken);
             return TypedResults.Created($"{BasePath}/{created.Discussion.Id}", DiscussionResponse.From(created));
         }
         catch (DiscussionValidationException invalid)
@@ -294,7 +294,7 @@ internal static class DiscussionEndpoints
             var field = malformed.InnerException is JsonException ? "body" : FieldFromJsonPath(malformed.Path);
             var message = field == "body"
                 ? "The request body is not a valid JSON object."
-                : $"'{field}' has the wrong JSON type; send a string.";
+                : WrongTypeMessage(field);
             return (null, Invalid(new Dictionary<string, string[]> { [field] = [message] }));
         }
     }
@@ -350,11 +350,36 @@ internal static class DiscussionEndpoints
                 text = null;
                 return true;
             default:
-                errors.Add(field, $"'{field}' has the wrong JSON type; send a string.");
+                errors.Add(field, WrongTypeMessage(field));
                 text = null;
                 return false;
         }
     }
+
+    /// <summary>Reads an array of strings (or null); any other JSON type records an error for the field and returns <c>false</c>.</summary>
+    private static bool TryReadStringArray(JsonElement value, string field, ValidationErrors errors, out IReadOnlyList<string?>? items)
+    {
+        items = null;
+        if (value.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        if (value.ValueKind != JsonValueKind.Array
+            || value.EnumerateArray().Any(item => item.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)))
+        {
+            errors.Add(field, WrongTypeMessage(field));
+            return false;
+        }
+
+        items = value.EnumerateArray().Select(item => item.GetString()).ToList();
+        return true;
+    }
+
+    private static string WrongTypeMessage(string field) =>
+        field == "topicTags"
+            ? $"'{field}' has the wrong JSON type; send an array of strings, for example [\"work.remote\"]."
+            : $"'{field}' has the wrong JSON type; send a string.";
 
     private static IResult UnsupportedMediaType() =>
         TypedResults.Problem(

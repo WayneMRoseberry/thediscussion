@@ -30,7 +30,7 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
                 throw new InvalidOperationException($"Discussion '{discussion.Id}' already exists.");
             }
 
-            var stored = new StoredDiscussion(discussion, nextSequence++);
+            var stored = new StoredDiscussion(discussion with { TopicTags = [.. discussion.TopicTags] }, nextSequence++);
             stored.Statements.Add(thesis);
             stored.StatementIds.Add(thesis.Id);
             discussions.Add(discussion.Id, stored);
@@ -62,7 +62,7 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
 
             var summary = stored.Summary;
             return Task.FromResult<Discussion?>(
-                new Discussion(summary.Id, summary.Title, summary.TopicTag, summary.CreatedAt, stored.Statements.ToList()));
+                new Discussion(summary.Id, summary.Title, summary.TopicTags, summary.CreatedAt, stored.Statements.ToList()));
         }
     }
 
@@ -97,7 +97,7 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
         return Task.CompletedTask;
     }
 
-    public Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, string topicTag, CancellationToken cancellationToken = default)
+    public Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, IReadOnlyList<string> topicTags, CancellationToken cancellationToken = default)
     {
         lock (gate)
         {
@@ -106,7 +106,7 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
                 return Task.FromResult(false);
             }
 
-            stored.Summary = stored.Summary with { Title = title, TopicTag = topicTag };
+            stored.Summary = stored.Summary with { Title = title, TopicTags = [.. topicTags] };
             return Task.FromResult(true);
         }
     }

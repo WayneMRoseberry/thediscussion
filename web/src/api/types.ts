@@ -18,7 +18,7 @@ export type SupportGroupType = 'allRequired' | 'anySufficient';
 export interface DiscussionSummary {
   id: string;
   title: string;
-  topicTag: string;
+  topicTags: string[];
   createdAt: string;
 }
 
@@ -48,7 +48,7 @@ export interface Discussion extends DiscussionSummary {
 
 export interface CreateDiscussionInput {
   title: string;
-  topicTag: string;
+  topicTags: string[];
   thesis: string;
 }
 
