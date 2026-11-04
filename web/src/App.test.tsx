@@ -1,15 +1,11 @@
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
-import App from './App';
+import { screen } from '@testing-library/react';
+import { renderAt } from './test/render';
 
 describe('App', () => {
-  it('renders the discussions home page', () => {
-    render(
-      <MemoryRouter>
-        <App />
-      </MemoryRouter>,
-    );
+  it('shows a not-found page for unknown routes', () => {
+    renderAt('/no/such/page');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Discussions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to all discussions' })).toHaveAttribute('href', '/');
   });
 });

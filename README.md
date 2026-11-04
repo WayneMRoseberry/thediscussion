@@ -12,7 +12,7 @@ Application for structured discussions. Product requirements live in
 | `src/TheDiscussion.Storage.InMemory` | In-memory storage provider (local default and tests). Data is lost when the API stops. |
 | `src/TheDiscussion.Storage.Postgres` | PostgreSQL storage provider (EF Core + Npgsql) with its migrations. |
 | `tests/` | xUnit test projects: core (status engine, validation), architecture rules, storage contract suite, API integration. |
-| `web/` | React + TypeScript + Vite front end. Talks to the API only through REST. |
+| `web/` | React + TypeScript + Vite front end (discussion list and outline view). Talks to the API only through REST. Tests use Vitest, React Testing Library and axe. |
 | `.github/workflows/ci.yml` | GitHub Actions CI: .NET build and tests (with a PostgreSQL service container), web lint, type-check, tests and build. |
 
 ## Prerequisites
@@ -105,7 +105,22 @@ npm run dev
 ```
 
 Open <http://localhost:5173>. The dev server proxies `/api` and `/health` to the API at
-`http://localhost:5080` (override with the `API_PROXY_TARGET` environment variable).
+`http://localhost:5080` (override with the `API_PROXY_TARGET` environment variable), so start the
+API first.
+
+### End to end
+
+1. Start the API (in-memory or PostgreSQL, above) in one terminal.
+2. Start the front end in another terminal.
+3. On the Discussions page, fill in *Start a discussion* (title, topic tag such as `work.remote`,
+   thesis) and select **Create discussion**. The new discussion opens.
+4. Use **+ Add support group**, **+ Add support**, **+ Add illustration**, **+ Add counter** and
+   **+ Add rebuttal** to build the argument. After each add, the outline and statuses refresh.
+
+The discussion view is an indented outline: the thesis with its status badge (UNSUPPORTED, OPEN,
+COUNTERED or TESTED), support groups labelled ALL REQUIRED or ANY SUFFICIENT, and each statement
+labelled with its kind and its marker (standing/countered for supporting statements,
+refuted/unrefuted for counter arguments and rebuttals).
 
 ## Tests
 
