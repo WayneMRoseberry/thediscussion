@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    name: .NET build and tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway credentials for the CI-only service container; not a secret.
+          POSTGRES_USER: thediscussion
+          POSTGRES_PASSWORD: thediscussion
+          POSTGRES_DB: thediscussion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thediscussion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      # The PostgreSQL storage contract tests run when this is set (they are skipped locally without it).
+      THEDISCUSSION_TEST_POSTGRES: Host=localhost;Port=5432;Username=thediscussion;Password=thediscussion;Database=thediscussion
+      # In CI a missing or unreachable database is a failure, never a skip.
+      THEDISCUSSION_REQUIRE_POSTGRES_TESTS: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
+
+  web:
+    name: Web lint, type-check, tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

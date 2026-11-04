@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Domain model, status engine and storage interfaces.
+    This project must stay storage-technology independent: no references to storage
+    provider projects, EF Core or Npgsql (enforced by TheDiscussion.Architecture.Tests).
+  -->
+  <PropertyGroup>
+    <RootNamespace>TheDiscussion.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

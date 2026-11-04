@@ -1,0 +1,77 @@
+using System.Text.Json.Serialization;
+using TheDiscussion.Core.Discussions;
+using TheDiscussion.Core.Status;
+
+namespace TheDiscussion.Api.Discussions;
+
+/// <summary><c>POST /api/v1/discussions</c> body.</summary>
+public sealed record CreateDiscussionRequest(string? Title, string? TopicTag, string? Thesis);
+
+/// <summary>
+/// <c>POST /api/v1/discussions/{id}/statements</c> body. <c>kind</c> is one of <c>supportGroup</c>,
+/// <c>supportingStatement</c>, <c>illustration</c>, <c>counterArgument</c>, <c>rebuttal</c>.
+/// Support groups take <c>groupType</c> (<c>allRequired</c> or <c>anySufficient</c>) and no text; every other kind takes text.
+/// </summary>
+public sealed record AddStatementRequest(string? Kind, string? ParentId, string? Text, string? GroupType);
+
+/// <summary>An entry of <c>GET /api/v1/discussions</c>.</summary>
+public sealed record DiscussionSummaryResponse(Guid Id, string Title, string TopicTag, DateTimeOffset CreatedAt)
+{
+    public static DiscussionSummaryResponse From(DiscussionSummary summary) =>
+        new(summary.Id, summary.Title, summary.TopicTag, summary.CreatedAt);
+}
+
+/// <summary>
+/// <c>GET /api/v1/discussions/{id}</c>: the full argument tree as a flat list in creation order (each statement
+/// names its <c>parentId</c>), with status computed on this read.
+/// </summary>
+public sealed record DiscussionResponse(
+    Guid Id,
+    string Title,
+    string TopicTag,
+    DateTimeOffset CreatedAt,
+    ThesisStatus Status,
+    Guid ThesisId,
+    IReadOnlyList<StatementResponse> Statements)
+{
+    public static DiscussionResponse From(DiscussionWithStatus value)
+    {
+        var (discussion, status) = (value.Discussion, value.Status);
+        return new DiscussionResponse(
+            discussion.Id,
+            discussion.Title,
+            discussion.TopicTag,
+            discussion.CreatedAt,
+            status.Thesis,
+            discussion.Thesis.Id,
+            discussion.Statements.Select(statement => StatementResponse.From(statement, status)).ToList());
+    }
+}
+
+/// <summary>
+/// One statement. <c>stands</c> is present on supporting statements, <c>refuted</c> on counter arguments and
+/// rebuttals, <c>holds</c> on non-empty support groups, <c>groupType</c> on support groups, <c>text</c> on every
+/// kind except support groups.
+/// </summary>
+public sealed record StatementResponse(
+    Guid Id,
+    StatementKind Kind,
+    Guid? ParentId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SupportGroupType? GroupType,
+    DateTimeOffset CreatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Stands,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Refuted,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Holds)
+{
+    public static StatementResponse From(Statement statement, ArgumentStatus status) => new(
+        statement.Id,
+        statement.Kind,
+        statement.ParentId,
+        statement.Text,
+        statement.GroupType,
+        statement.CreatedAt,
+        status.Stands.TryGetValue(statement.Id, out var stands) ? stands : null,
+        status.Refuted.TryGetValue(statement.Id, out var refuted) ? refuted : null,
+        status.Holds.TryGetValue(statement.Id, out var holds) ? holds : null);
+}
