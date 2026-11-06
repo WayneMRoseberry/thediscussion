@@ -1,4 +1,5 @@
-// Wire types for the REST API (/api/v1). Keep in sync with src/TheDiscussion.Api/Discussions/DiscussionContracts.cs.
+// Wire types for the REST API (/api/v1). Keep in sync with src/TheDiscussion.Api/Discussions/DiscussionContracts.cs
+// and src/TheDiscussion.Api/Topics/TopicEndpoints.cs.
 
 export type ThesisStatus = 'unsupported' | 'open' | 'countered' | 'tested';
 
@@ -18,7 +19,8 @@ export type SupportGroupType = 'allRequired' | 'anySufficient';
 export interface DiscussionSummary {
   id: string;
   title: string;
-  topicTag: string;
+  /** 1 to 5 distinct tags, in the order they were given. */
+  topicTags: string[];
   createdAt: string;
 }
 
@@ -31,6 +33,8 @@ export interface Statement {
   /** Present on support groups. */
   groupType?: SupportGroupType;
   createdAt: string;
+  /** When the text was last edited; null until the first edit. */
+  editedAt: string | null;
   /** Present on supporting statements. */
   stands?: boolean;
   /** Present on counter arguments and rebuttals. */
@@ -48,8 +52,14 @@ export interface Discussion extends DiscussionSummary {
 
 export interface CreateDiscussionInput {
   title: string;
-  topicTag: string;
+  topicTags: string[];
   thesis: string;
+}
+
+/** Only the fields sent are changed. */
+export interface UpdateDiscussionInput {
+  title?: string;
+  topicTags?: string[];
 }
 
 export interface AddStatementInput {
@@ -57,6 +67,17 @@ export interface AddStatementInput {
   parentId: string;
   text?: string;
   groupType?: SupportGroupType;
+}
+
+/** A node of GET /api/v1/topics. */
+export interface TopicNode {
+  tag: string;
+  /** The tag's last segment. */
+  name: string;
+  /** Distinct discussions tagged with this tag or one of its sub-tags. */
+  discussionCount: number;
+  /** Direct sub-tags, sorted by name. */
+  children: TopicNode[];
 }
 
 /** RFC 7807 problem details, with ASP.NET Core's validation `errors` extension. */

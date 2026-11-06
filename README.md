@@ -12,7 +12,7 @@ Application for structured discussions. Product requirements live in
 | `src/TheDiscussion.Storage.InMemory` | In-memory storage provider (local default and tests). Data is lost when the API stops. |
 | `src/TheDiscussion.Storage.Postgres` | PostgreSQL storage provider (EF Core + Npgsql) with its migrations. |
 | `tests/` | xUnit test projects: core (status engine, validation), architecture rules, storage contract suite, API integration. |
-| `web/` | React + TypeScript + Vite front end (discussion list and outline view). Talks to the API only through REST. Tests use Vitest, React Testing Library and axe. |
+| `web/` | React + TypeScript + Vite front end (discussion list, outline view with editing and deleting, topic pages). Talks to the API only through REST. Tests use Vitest, React Testing Library and axe. |
 | `.github/workflows/ci.yml` | GitHub Actions CI: .NET build and tests (with a PostgreSQL service container), web lint, type-check, tests and build. |
 
 ## Prerequisites
@@ -58,19 +58,46 @@ with one entry per request (method, route, status code, duration).
 
 Routes are under `/api/v1`. JSON is camelCase, ids are GUIDs, and errors are RFC 7807 problem
 details (`application/problem+json`; validation errors list each offending field under `errors`).
-Write endpoints are open (no accounts yet), so only run the API in local and test environments.
+Write endpoints are open (no accounts yet): anyone who can reach the API can create, edit and delete
+any discussion or statement, including through `PATCH` and `DELETE` on
+`/api/v1/discussions/{id}` and `/api/v1/discussions/{id}/statements/{statementId}`. Only run the API
+in local and test environments.
 
 | Method and route | Body | Result |
 | --- | --- | --- |
-| `GET /api/v1/discussions` | | 200, `[{ id, title, topicTag, createdAt }]`, most recent first |
-| `POST /api/v1/discussions` | `{ title, topicTag, thesis }` | 201 with the discussion, or 400 |
+| `GET /api/v1/discussions` | | 200, `[{ id, title, topicTags, createdAt }]`, most recent first |
+| `GET /api/v1/discussions?tag={tag}` | | 200, the discussions with a tag equal to `{tag}` or under it (`{tag}.…`), each once, most recent first; 400 naming `tag` for a malformed tag |
+| `POST /api/v1/discussions` | `{ title, topicTags, thesis }` | 201 with the discussion, or 400 |
 | `GET /api/v1/discussions/{id}` | | 200 with the full tree and computed status, or 404 |
+| `PATCH /api/v1/discussions/{id}` | `{ title?, topicTags? }` | 200 with the updated discussion, 400, or 404. Only the fields sent change |
+| `DELETE /api/v1/discussions/{id}` | | 204 (the discussion and all its statements are removed), or 404 |
 | `POST /api/v1/discussions/{id}/statements` | `{ kind, parentId, text?, groupType? }` | 201 with the statement, 400, or 404 |
+| `PATCH /api/v1/discussions/{id}/statements/{statementId}` | `{ text }` | 200 with the statement (`editedAt` set), 400, or 404 |
+| `DELETE /api/v1/discussions/{id}/statements/{statementId}` | | 204 (the statement and everything beneath it are removed), 400 for the thesis, or 404 |
+| `GET /api/v1/topics` | | 200, the tag tree: `[{ tag, name, discussionCount, children }]` |
 | `GET /health` | | 200 (`storage.reachable: true`) or 503 |
 
 Limits: title 1–200 characters, statement text 1–5000 characters (leading and trailing whitespace
-is trimmed), topic tag 1–5 dot-separated lowercase segments of `[a-z0-9-]` (for example
-`work.remote`).
+is trimmed), `topicTags` 1–5 distinct tags, each 1–5 dot-separated lowercase segments of
+`[a-z0-9-]` (for example `["work.remote", "management"]`). An empty list, more than 5 tags, a
+duplicate or a malformed tag is rejected with 400 naming `topicTags`. `topicTags` replaced the
+single `topicTag` field; discussions stored before the change have a one-item list holding their
+old tag.
+
+Topics: tags exist only through discussions. Filtering by tag matches whole segments, so
+`?tag=work` matches `work` and `work.remote` but not `workshop`, and a valid tag nobody uses
+returns an empty list. In `GET /api/v1/topics` each node has its full `tag`, its last segment as
+`name`, `discussionCount` (distinct discussions tagged with it or any sub-tag, so a discussion
+tagged `work.remote` and `work.hours` counts once for `work`) and its `children` sorted by name. A
+segment used only as a prefix (`work` when only `work.remote` is used) is still a node.
+
+Editing and deleting: any statement with text (every kind except support groups, including the
+thesis) can be edited at any time, even with statements attached beneath it. An edit replaces the
+text and sets `editedAt` (`null` until the first edit); kind and parent never change, so an edit
+does not change any status. Deleting a statement is a hard delete of it and everything beneath it,
+at any depth, in one atomic operation; status is recomputed on the next read. The thesis cannot be
+deleted on its own (400 naming `statementId`): delete the discussion instead. Concurrent edits are
+last write wins; there is no edit history or undo.
 
 Statement kinds and what they may target (`parentId`):
 
@@ -112,10 +139,21 @@ API first.
 
 1. Start the API (in-memory or PostgreSQL, above) in one terminal.
 2. Start the front end in another terminal.
-3. On the Discussions page, fill in *Start a discussion* (title, topic tag such as `work.remote`,
-   thesis) and select **Create discussion**. The new discussion opens.
+3. On the Discussions page, fill in *Start a discussion* (title, topic tags such as
+   `work.remote, management`, separated by commas or spaces, and the thesis) and select
+   **Create discussion**. The new discussion opens.
 4. Use **+ Add support group**, **+ Add support**, **+ Add illustration**, **+ Add counter** and
    **+ Add rebuttal** to build the argument. After each add, the outline and statuses refresh.
+5. Edit or delete as you go. The discussion header has **Edit** (title and tags, in place) and
+   **Delete** (the whole discussion; you return to the list). Each outline row has **Edit** for
+   statements with text, which edits the text in place, and **Delete** for every statement except the
+   thesis. Each delete asks for confirmation first and says how many statements beneath the target
+   go with it, for example "Delete this counter argument and 3 statements beneath it?". Edited
+   statements show *(edited)*. After each edit or delete, the outline and statuses refresh.
+6. Browse by topic: every tag (`#work.remote`) links to its tag page, and **Browse discussions by
+   topic** on the Discussions page opens `/topics`, the tag tree with discussion counts. A tag page
+   (`/topics/work.remote`) shows breadcrumbs for each segment (Topics > work > remote), its
+   sub-topics with counts, and the discussions at or under the tag.
 
 The discussion view is an indented outline: the thesis with its status badge (UNSUPPORTED, OPEN,
 COUNTERED or TESTED), support groups labelled ALL REQUIRED or ANY SUFFICIENT, and each statement

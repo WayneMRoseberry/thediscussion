@@ -48,7 +48,7 @@ export const notFoundProblem: FakeResponse = {
 const created = '2026-11-03T12:00:00.000000+00:00';
 
 function statement(partial: Partial<Statement> & Pick<Statement, 'id' | 'kind'>): Statement {
-  return { parentId: null, createdAt: created, ...partial };
+  return { parentId: null, createdAt: created, editedAt: null, ...partial };
 }
 
 /**
@@ -59,7 +59,7 @@ export function referenceDiscussion(): Discussion {
   return {
     id: 'd1',
     title: 'Remote work boosts productivity',
-    topicTag: 'work.remote',
+    topicTags: ['work.remote'],
     createdAt: created,
     status: 'countered',
     thesisId: 't',

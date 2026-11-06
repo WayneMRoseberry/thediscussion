@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using TheDiscussion.Api.Discussions;
 using TheDiscussion.Api.Health;
 using TheDiscussion.Api.Logging;
+using TheDiscussion.Api.Topics;
 using TheDiscussion.Core.Discussions;
 
 namespace TheDiscussion.Api;
@@ -39,6 +40,7 @@ public static class DiscussionApi
 
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = HealthResponseWriter.WriteAsync });
         app.MapDiscussionEndpoints();
+        app.MapTopicEndpoints();
 
         return app;
     }

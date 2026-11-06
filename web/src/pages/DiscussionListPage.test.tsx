@@ -5,8 +5,8 @@ import { mockApi, networkFailure, referenceDiscussion, validationProblem } from 
 import { renderAt } from '../test/render';
 
 const summaries: DiscussionSummary[] = [
-  { id: 'd1', title: 'Remote work boosts productivity', topicTag: 'work.remote', createdAt: '2026-11-03T12:00:00Z' },
-  { id: 'd2', title: 'Cities should ban cars', topicTag: 'cities.transport', createdAt: '2026-11-02T12:00:00Z' },
+  { id: 'd1', title: 'Remote work boosts productivity', topicTags: ['work.remote'], createdAt: '2026-11-03T12:00:00Z' },
+  { id: 'd2', title: 'Cities should ban cars', topicTags: ['cities.transport', 'environment'], createdAt: '2026-11-02T12:00:00Z' },
 ];
 
 describe('DiscussionListPage', () => {
@@ -27,17 +27,50 @@ describe('DiscussionListPage', () => {
     expect(screen.queryByRole('list', { name: 'All discussions' })).not.toBeInTheDocument();
   });
 
-  it('links to each discussion', async () => {
+  it('links to each discussion and to each of its tags', async () => {
     mockApi(() => ({ status: 200, body: summaries }));
 
     renderAt('/');
 
     const list = await screen.findByRole('list', { name: 'All discussions' });
     const links = within(list).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['Remote work boosts productivity', 'Cities should ban cars']);
-    expect(links[0]).toHaveAttribute('href', '/discussions/d1');
-    expect(links[1]).toHaveAttribute('href', '/discussions/d2');
-    expect(within(list).getByText('work.remote')).toBeInTheDocument();
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Remote work boosts productivity',
+      '#work.remote',
+      'Cities should ban cars',
+      '#cities.transport',
+      '#environment',
+    ]);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/discussions/d1',
+      '/topics/work.remote',
+      '/discussions/d2',
+      '/topics/cities.transport',
+      '/topics/environment',
+    ]);
+  });
+
+  it('links to the topics page', async () => {
+    mockApi(() => ({ status: 200, body: summaries }));
+
+    renderAt('/');
+
+    expect(screen.getByRole('link', { name: 'Browse discussions by topic' })).toHaveAttribute('href', '/topics');
+  });
+
+  it('opens the tag page from a tag link', async () => {
+    mockApi(({ path }) => {
+      if (path === '/api/v1/topics') return { status: 200, body: [{ tag: 'work', name: 'work', discussionCount: 1, children: [{ tag: 'work.remote', name: 'remote', discussionCount: 1, children: [] }] }] };
+      if (path === '/api/v1/discussions?tag=work.remote') return { status: 200, body: [summaries[0]] };
+      return { status: 200, body: summaries };
+    });
+    const { user } = renderAt('/');
+
+    await user.click(await screen.findByRole('link', { name: '#work.remote' }));
+
+    expect(await screen.findByRole('heading', { level: 2, name: '1 discussion' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('work.remote');
+    expect(within(screen.getByRole('list', { name: 'Discussions under work.remote' })).getByRole('link', { name: 'Remote work boosts productivity' })).toBeInTheDocument();
   });
 
   it('shows an error with a retry that reloads', async () => {
@@ -67,7 +100,7 @@ describe('DiscussionListPage', () => {
     await screen.findByText(/No discussions yet/);
 
     await user.type(screen.getByLabelText('Title'), 'Tea beats coffee');
-    await user.type(screen.getByLabelText('Topic tag'), 'food.drinks');
+    await user.type(screen.getByLabelText('Topic tags'), 'food.drinks, health  morning');
     await user.type(screen.getByLabelText('Thesis'), 'Tea is better than coffee');
     await user.click(screen.getByRole('button', { name: 'Create discussion' }));
 
@@ -75,7 +108,7 @@ describe('DiscussionListPage', () => {
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!;
     expect(JSON.parse(post[1]!.body as string)).toEqual({
       title: 'Tea beats coffee',
-      topicTag: 'food.drinks',
+      topicTags: ['food.drinks', 'health', 'morning'],
       thesis: 'Tea is better than coffee',
     });
   });
@@ -83,18 +116,18 @@ describe('DiscussionListPage', () => {
   it('shows API validation errors next to the fields', async () => {
     mockApi(({ method }) =>
       method === 'POST'
-        ? validationProblem({ topicTag: ['Topic tag must be 1 to 5 dot-separated segments.'], title: ['Title is required.'] })
+        ? validationProblem({ topicTags: ['Topic tag must be 1 to 5 dot-separated segments.'], title: ['Title is required.'] })
         : { status: 200, body: [] },
     );
     const { user } = renderAt('/');
     await screen.findByText(/No discussions yet/);
 
-    await user.type(screen.getByLabelText('Topic tag'), 'Not A Tag');
+    await user.type(screen.getByLabelText('Topic tags'), 'Not A Tag');
     await user.click(screen.getByRole('button', { name: 'Create discussion' }));
 
-    const topicTag = screen.getByLabelText('Topic tag');
-    await waitFor(() => expect(topicTag).toHaveAttribute('aria-invalid', 'true'));
-    expect(topicTag).toHaveAccessibleDescription(expect.stringContaining('Topic tag must be 1 to 5 dot-separated segments.'));
+    const topicTags = screen.getByLabelText('Topic tags');
+    await waitFor(() => expect(topicTags).toHaveAttribute('aria-invalid', 'true'));
+    expect(topicTags).toHaveAccessibleDescription(expect.stringContaining('Topic tag must be 1 to 5 dot-separated segments.'));
     expect(screen.getByLabelText('Title')).toHaveAccessibleDescription(expect.stringContaining('Title is required.'));
     expect(screen.getByLabelText('Thesis')).not.toHaveAttribute('aria-invalid');
   });

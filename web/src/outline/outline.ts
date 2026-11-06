@@ -90,3 +90,39 @@ export function describeStatement(statement: Statement): string {
   const short = text.length > 80 ? `${text.slice(0, 77)}...` : text;
   return `[${kindLabels[statement.kind]}] ${short}`;
 }
+
+/** Lowercase name of every kind, for messages and accessible labels. */
+export const statementNames: Record<StatementKind, string> = {
+  thesis: 'thesis',
+  ...kindNames,
+};
+
+/** How many statements sit beneath a statement, at any depth (they are deleted with it). */
+export function countBeneath(statements: Statement[], id: string): number {
+  const childrenOf = new Map<string, string[]>();
+  statements.forEach((statement) => {
+    if (statement.parentId) {
+      childrenOf.set(statement.parentId, [...(childrenOf.get(statement.parentId) ?? []), statement.id]);
+    }
+  });
+
+  let count = 0;
+  const pending = [...(childrenOf.get(id) ?? [])];
+  while (pending.length > 0) {
+    const next = pending.pop()!;
+    count += 1;
+    pending.push(...(childrenOf.get(next) ?? []));
+  }
+  return count;
+}
+
+/** "1 statement", "3 statements". */
+export function statementCount(count: number): string {
+  return `${count} ${count === 1 ? 'statement' : 'statements'}`;
+}
+
+/** The delete confirmation question, naming how many statements beneath the target also go. */
+export function deleteQuestion(statement: Statement, beneath: number): string {
+  const name = statementNames[statement.kind];
+  return beneath === 0 ? `Delete this ${name}?` : `Delete this ${name} and ${statementCount(beneath)} beneath it?`;
+}

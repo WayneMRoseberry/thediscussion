@@ -16,14 +16,14 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
     {
         using var response = await api.Http.PostAsJsonAsync(
             DiscussionsPath,
-            new { title = "Remote work boosts productivity", topicTag = "work.remote", thesis = "Remote work boosts productivity" });
+            new { title = "Remote work boosts productivity", topicTags = new[] { "work.remote" }, thesis = "Remote work boosts productivity" });
         var body = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal($"{DiscussionsPath}/{Id(body)}", response.Headers.Location?.OriginalString);
         Assert.True(Guid.TryParse(Id(body), out _));
         Assert.Equal("Remote work boosts productivity", body.GetProperty("title").GetString());
-        Assert.Equal("work.remote", body.GetProperty("topicTag").GetString());
+        Assert.Equal(["work.remote"], Tags(body));
         Assert.Equal("unsupported", body.GetProperty("status").GetString());
         var thesis = Assert.Single(body.GetProperty("statements").EnumerateArray());
         Assert.Equal("thesis", thesis.GetProperty("kind").GetString());
@@ -43,7 +43,7 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var entry = list.EnumerateArray().Single(item => Id(item) == Id(created));
         Assert.Equal("Listed discussion", entry.GetProperty("title").GetString());
-        Assert.Equal("api.listing", entry.GetProperty("topicTag").GetString());
+        Assert.Equal(["api.listing"], Tags(entry));
     }
 
     [Fact]
@@ -126,11 +126,11 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
         { "title over 200", new string('t', 201), "work.remote", "Thesis", "title" },
         { "missing thesis", "Title", "work.remote", null, "thesis" },
         { "thesis over 5000", "Title", "work.remote", new string('x', 5001), "thesis" },
-        { "missing topic tag", "Title", null, "Thesis", "topicTag" },
-        { "uppercase topic tag", "Title", "Work.Remote", "Thesis", "topicTag" },
-        { "empty segment", "Title", "work..remote", "Thesis", "topicTag" },
-        { "six segments", "Title", "a.b.c.d.e.f", "Thesis", "topicTag" },
-        { "underscore", "Title", "work_remote", "Thesis", "topicTag" },
+        { "missing topic tags", "Title", null, "Thesis", "topicTags" },
+        { "uppercase topic tag", "Title", "Work.Remote", "Thesis", "topicTags" },
+        { "empty segment", "Title", "work..remote", "Thesis", "topicTags" },
+        { "six segments", "Title", "a.b.c.d.e.f", "Thesis", "topicTags" },
+        { "underscore", "Title", "work_remote", "Thesis", "topicTags" },
     };
 
     [Theory]
@@ -139,7 +139,7 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
     {
         var before = await CountDiscussionsAsync();
 
-        using var response = await api.Http.PostAsJsonAsync(DiscussionsPath, new { title, topicTag, thesis });
+        using var response = await api.Http.PostAsJsonAsync(DiscussionsPath, new { title, topicTags = topicTag is null ? null : new[] { topicTag }, thesis });
 
         await AssertValidationProblemAsync(response, field, scenario);
         Assert.Equal(before, await CountDiscussionsAsync());
@@ -217,7 +217,7 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
     [Fact]
     public async Task Wrong_json_type_is_rejected_with_400_naming_the_field()
     {
-        using var content = new StringContent("{\"title\": 42, \"topicTag\": \"a.b\", \"thesis\": \"x\"}", Encoding.UTF8, "application/json");
+        using var content = new StringContent("{\"title\": 42, \"topicTags\": [\"a.b\"], \"thesis\": \"x\"}", Encoding.UTF8, "application/json");
 
         using var response = await api.Http.PostAsync(DiscussionsPath, content);
 
@@ -305,19 +305,6 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
 
     private async Task<int> CountStatementsAsync(string id) =>
         (await api.GetDiscussionAsync(id)).GetProperty("statements").GetArrayLength();
-
-    private static async Task AssertValidationProblemAsync(HttpResponseMessage response, string field, string scenario)
-    {
-        var problem = await ReadJsonAsync(response);
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{scenario}: expected 400, got {(int)response.StatusCode} {problem}");
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(400, problem.GetProperty("status").GetInt32());
-        Assert.False(string.IsNullOrEmpty(problem.GetProperty("title").GetString()));
-        Assert.False(string.IsNullOrEmpty(problem.GetProperty("type").GetString()));
-        var errors = problem.GetProperty("errors");
-        Assert.True(errors.TryGetProperty(field, out var messages), $"{scenario}: expected an error for '{field}' in {errors}");
-        Assert.NotEqual(0, messages.GetArrayLength());
-    }
 
     private static void AssertStatement(JsonElement tree, string id, string kind, string parentId, string? text = null)
     {

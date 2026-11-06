@@ -54,10 +54,30 @@ public class HealthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<IReadOnlyList<DiscussionSummary>> ListDiscussionsUnderTagAsync(string tag, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<Discussion?> GetDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task AddStatementAsync(Statement statement, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> UpdateDiscussionAsync(Guid discussionId, string title, IReadOnlyList<string> topicTags, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> DeleteDiscussionAsync(Guid discussionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task UpdateStatementTextAsync(
+            Guid discussionId,
+            Guid statementId,
+            string text,
+            DateTimeOffset editedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task DeleteStatementAsync(Guid discussionId, Guid statementId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 }

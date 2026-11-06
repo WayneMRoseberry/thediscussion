@@ -45,17 +45,35 @@ namespace TheDiscussion.Storage.Postgres.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("title");
 
-                    b.Property<string>("TopicTag")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("topic_tag");
-
                     b.HasKey("Id");
 
                     b.HasIndex("Sequence")
                         .IsUnique();
 
                     b.ToTable("discussions", (string)null);
+                });
+
+            modelBuilder.Entity("TheDiscussion.Storage.Postgres.DiscussionTopicTagEntity", b =>
+                {
+                    b.Property<Guid>("DiscussionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("discussion_id");
+
+                    b.Property<string>("Tag")
+                        .HasColumnType("text")
+                        .HasColumnName("tag");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.HasKey("DiscussionId", "Tag");
+
+                    b.HasIndex("Tag");
+
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Tag"), new[] { "text_pattern_ops" });
+
+                    b.ToTable("discussion_topic_tags", (string)null);
                 });
 
             modelBuilder.Entity("TheDiscussion.Storage.Postgres.StatementEntity", b =>
@@ -71,6 +89,10 @@ namespace TheDiscussion.Storage.Postgres.Migrations
                     b.Property<Guid>("DiscussionId")
                         .HasColumnType("uuid")
                         .HasColumnName("discussion_id");
+
+                    b.Property<DateTimeOffset?>("EditedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("edited_at");
 
                     b.Property<string>("GroupType")
                         .HasMaxLength(32)
@@ -113,6 +135,15 @@ namespace TheDiscussion.Storage.Postgres.Migrations
                     b.ToTable("statements", (string)null);
                 });
 
+            modelBuilder.Entity("TheDiscussion.Storage.Postgres.DiscussionTopicTagEntity", b =>
+                {
+                    b.HasOne("TheDiscussion.Storage.Postgres.DiscussionEntity", null)
+                        .WithMany("TopicTags")
+                        .HasForeignKey("DiscussionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TheDiscussion.Storage.Postgres.StatementEntity", b =>
                 {
                     b.HasOne("TheDiscussion.Storage.Postgres.DiscussionEntity", null)
@@ -124,12 +155,14 @@ namespace TheDiscussion.Storage.Postgres.Migrations
                     b.HasOne("TheDiscussion.Storage.Postgres.StatementEntity", null)
                         .WithMany()
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("TheDiscussion.Storage.Postgres.DiscussionEntity", b =>
                 {
                     b.Navigation("Statements");
+
+                    b.Navigation("TopicTags");
                 });
 #pragma warning restore 612, 618
         }

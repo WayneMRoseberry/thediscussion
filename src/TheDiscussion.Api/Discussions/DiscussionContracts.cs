@@ -4,8 +4,8 @@ using TheDiscussion.Core.Status;
 
 namespace TheDiscussion.Api.Discussions;
 
-/// <summary><c>POST /api/v1/discussions</c> body.</summary>
-public sealed record CreateDiscussionRequest(string? Title, string? TopicTag, string? Thesis);
+/// <summary><c>POST /api/v1/discussions</c> body. <c>topicTags</c> holds 1 to 5 distinct tags, for example <c>["work.remote", "management"]</c>.</summary>
+public sealed record CreateDiscussionRequest(string? Title, IReadOnlyList<string?>? TopicTags, string? Thesis);
 
 /// <summary>
 /// <c>POST /api/v1/discussions/{id}/statements</c> body. <c>kind</c> is one of <c>supportGroup</c>,
@@ -14,11 +14,15 @@ public sealed record CreateDiscussionRequest(string? Title, string? TopicTag, st
 /// </summary>
 public sealed record AddStatementRequest(string? Kind, string? ParentId, string? Text, string? GroupType);
 
+// PATCH bodies are read field by field (DiscussionEndpoints), so a field that is absent can be told apart from one sent as null:
+// PATCH /api/v1/discussions/{id}                         { title?, topicTags? }  only the fields sent change
+// PATCH /api/v1/discussions/{id}/statements/{statementId} { text }                kind and parent never change
+
 /// <summary>An entry of <c>GET /api/v1/discussions</c>.</summary>
-public sealed record DiscussionSummaryResponse(Guid Id, string Title, string TopicTag, DateTimeOffset CreatedAt)
+public sealed record DiscussionSummaryResponse(Guid Id, string Title, IReadOnlyList<string> TopicTags, DateTimeOffset CreatedAt)
 {
     public static DiscussionSummaryResponse From(DiscussionSummary summary) =>
-        new(summary.Id, summary.Title, summary.TopicTag, summary.CreatedAt);
+        new(summary.Id, summary.Title, summary.TopicTags, summary.CreatedAt);
 }
 
 /// <summary>
@@ -28,7 +32,7 @@ public sealed record DiscussionSummaryResponse(Guid Id, string Title, string Top
 public sealed record DiscussionResponse(
     Guid Id,
     string Title,
-    string TopicTag,
+    IReadOnlyList<string> TopicTags,
     DateTimeOffset CreatedAt,
     ThesisStatus Status,
     Guid ThesisId,
@@ -40,7 +44,7 @@ public sealed record DiscussionResponse(
         return new DiscussionResponse(
             discussion.Id,
             discussion.Title,
-            discussion.TopicTag,
+            discussion.TopicTags,
             discussion.CreatedAt,
             status.Thesis,
             discussion.Thesis.Id,
@@ -51,7 +55,7 @@ public sealed record DiscussionResponse(
 /// <summary>
 /// One statement. <c>stands</c> is present on supporting statements, <c>refuted</c> on counter arguments and
 /// rebuttals, <c>holds</c> on non-empty support groups, <c>groupType</c> on support groups, <c>text</c> on every
-/// kind except support groups.
+/// kind except support groups. <c>editedAt</c> is always present: <c>null</c> until the text is first edited.
 /// </summary>
 public sealed record StatementResponse(
     Guid Id,
@@ -60,6 +64,7 @@ public sealed record StatementResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SupportGroupType? GroupType,
     DateTimeOffset CreatedAt,
+    DateTimeOffset? EditedAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Stands,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Refuted,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Holds)
@@ -71,6 +76,7 @@ public sealed record StatementResponse(
         statement.Text,
         statement.GroupType,
         statement.CreatedAt,
+        statement.EditedAt,
         status.Stands.TryGetValue(statement.Id, out var stands) ? stands : null,
         status.Refuted.TryGetValue(statement.Id, out var refuted) ? refuted : null,
         status.Holds.TryGetValue(statement.Id, out var holds) ? holds : null);

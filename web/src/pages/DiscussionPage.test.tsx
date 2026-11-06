@@ -114,6 +114,7 @@ describe('DiscussionPage', () => {
       kind: 'counterArgument',
       parentId: 's2',
       text: 'Commutes are thinking time',
+      editedAt: null,
       createdAt: '2026-11-03T13:00:00Z',
       refuted: false,
     };

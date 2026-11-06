@@ -1,6 +1,8 @@
 import { Link, Route, Routes } from 'react-router';
 import DiscussionListPage from './pages/DiscussionListPage';
 import DiscussionPage from './pages/DiscussionPage';
+import TopicPage from './pages/TopicPage';
+import TopicsPage from './pages/TopicsPage';
 
 export default function App() {
   return (
@@ -14,6 +16,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DiscussionListPage />} />
           <Route path="/discussions/:id" element={<DiscussionPage />} />
+          <Route path="/topics" element={<TopicsPage />} />
+          <Route path="/topics/:tag" element={<TopicPage />} />
           <Route
             path="*"
             element={

@@ -318,3 +318,136 @@ button:disabled {
   background: #ffffff;
   color: var(--accent);
 }
+
+.button-danger {
+  border-color: var(--bad);
+  background: var(--bad);
+}
+
+.button-secondary--danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+/* Topic tags (#work.remote), linking to their tag pages */
+.topic-tags {
+  display: inline;
+}
+
+a.topic-tag {
+  color: var(--accent);
+}
+
+.discussion-tags {
+  margin-top: -0.5rem;
+}
+
+.discussion-header .form-actions {
+  margin-bottom: 1rem;
+}
+
+.announcement:empty {
+  display: none;
+}
+
+/* Outline rows: the statement, then its Edit and Delete controls */
+.outline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.outline-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.link-button {
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.875rem;
+  text-decoration: underline;
+}
+
+.link-button--danger {
+  color: var(--bad);
+}
+
+.edited-marker {
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.edit-form {
+  margin: 0.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.edit-form .error-banner {
+  margin-bottom: 1rem;
+}
+
+/* Confirmation dialog */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10;
+}
+
+.dialog {
+  max-width: 32rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.dialog h2 {
+  margin-top: 0;
+}
+
+.dialog .form-error {
+  margin-bottom: 1rem;
+}
+
+/* Topics */
+.topic-tree {
+  padding-left: 1.25rem;
+}
+
+.topic-tree .topic-tree {
+  padding-left: 1.5rem;
+}
+
+.topic-tree li {
+  margin: 0.25rem 0;
+}
+
+.topic-count {
+  color: var(--muted);
+}
+
+.subtopic-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.subtopics h2 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}

@@ -30,14 +30,13 @@ const missingTargetHints: Record<AddableKind, string> = {
 
 interface AddStatementPanelProps {
   discussion: Discussion;
-  /** Called after the API accepted a statement, so the page can reload the outline and statuses. */
-  onAdded: () => void;
+  /** Called after the API accepted a statement, with a message to announce, so the page can reload the outline and statuses. */
+  onAdded: (announcement: string) => void;
 }
 
 /** Buttons that open a form for each statement kind. */
 export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProps) {
   const [activeKind, setActiveKind] = useState<AddableKind | null>(null);
-  const [announcement, setAnnouncement] = useState('');
   const formId = useId();
 
   return (
@@ -52,7 +51,6 @@ export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProp
             aria-expanded={activeKind === kind}
             aria-controls={activeKind === kind ? formId : undefined}
             onClick={() => {
-              setAnnouncement('');
               setActiveKind(activeKind === kind ? null : kind);
             }}
           >
@@ -61,9 +59,6 @@ export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProp
           </button>
         ))}
       </div>
-      <p role="status" className="add-announcement">
-        {announcement}
-      </p>
       {activeKind && (
         <AddStatementForm
           key={activeKind}
@@ -72,9 +67,8 @@ export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProp
           discussion={discussion}
           onCancel={() => setActiveKind(null)}
           onAdded={() => {
-            setAnnouncement(`Added the ${kindNames[activeKind]}.`);
             setActiveKind(null);
-            onAdded();
+            onAdded(`Added the ${kindNames[activeKind]}.`);
           }}
         />
       )}
