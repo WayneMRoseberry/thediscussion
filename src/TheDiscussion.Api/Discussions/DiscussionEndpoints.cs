@@ -103,24 +103,45 @@ internal static class DiscussionEndpoints
             return error;
         }
 
+        // Only record what was sent here; the service decides, in the UC-3 order, which field to report.
         var formatErrors = new ValidationErrors();
-        foreach (var fixedField in new[] { "kind", "parentId", "groupType" })
+        var changes = StatementChanges.None;
+        if (TryGetField(body, "kind", out _))
         {
-            if (TryGetField(body, fixedField, out _))
-            {
-                formatErrors.Add(fixedField, "Only a statement's text can be edited; its kind, parent and group type never change.");
-            }
+            changes = changes.WithKind();
         }
 
-        string? text = null;
+        if (TryGetField(body, "parentId", out _))
+        {
+            changes = changes.WithParentId();
+        }
+
         if (TryGetField(body, "text", out var textValue))
         {
-            TryReadString(textValue, "text", formatErrors, out text);
+            TryReadString(textValue, "text", formatErrors, out var text);
+            changes = changes.WithText(text);
+        }
+
+        if (TryGetField(body, "name", out var nameValue))
+        {
+            TryReadString(nameValue, "name", formatErrors, out var name);
+            changes = changes.WithName(name);
+        }
+
+        if (TryGetField(body, "groupType", out var groupTypeValue))
+        {
+            SupportGroupType? groupType = null;
+            if (TryReadString(groupTypeValue, "groupType", formatErrors, out var groupTypeName) && groupTypeName is not null)
+            {
+                groupType = ParseGroupType(groupTypeName, formatErrors);
+            }
+
+            changes = changes.WithGroupType(groupType);
         }
 
         try
         {
-            var (statement, discussion) = await service.EditStatementTextAsync(id, statementId, text, formatErrors, cancellationToken);
+            var (statement, discussion) = await service.EditStatementAsync(id, statementId, changes, formatErrors, cancellationToken);
             return TypedResults.Ok(StatementResponse.From(statement, discussion.Status));
         }
         catch (DiscussionNotFoundException)
@@ -278,17 +299,22 @@ internal static class DiscussionEndpoints
         SupportGroupType? groupType = null;
         if (!string.IsNullOrWhiteSpace(body.GroupType))
         {
-            if (GroupTypeNames.TryGetValue(body.GroupType.Trim(), out var parsedGroupType))
-            {
-                groupType = parsedGroupType;
-            }
-            else
-            {
-                errors.Add("groupType", $"Group type must be one of: {string.Join(", ", GroupTypeNames.Keys)}.");
-            }
+            groupType = ParseGroupType(body.GroupType, errors);
         }
 
-        return new NewStatement(kind, parentId, body.Text, groupType);
+        return new NewStatement(kind, parentId, body.Text, groupType, body.Name);
+    }
+
+    /// <summary>A group type name, matched case-insensitively after trimming; anything else records a <c>groupType</c> error.</summary>
+    private static SupportGroupType? ParseGroupType(string value, ValidationErrors errors)
+    {
+        if (GroupTypeNames.TryGetValue(value.Trim(), out var groupType))
+        {
+            return groupType;
+        }
+
+        errors.Add("groupType", $"Group type must be one of: {string.Join(", ", GroupTypeNames.Keys)}.");
+        return null;
     }
 
     /// <summary>Reads a JSON object body. Malformed JSON yields a 400 naming the offending field (or <c>body</c>).</summary>

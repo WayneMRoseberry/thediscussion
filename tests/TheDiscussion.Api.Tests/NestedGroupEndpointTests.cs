@@ -30,7 +30,7 @@ public class NestedGroupEndpointTests(ApiFactory factory) : IClassFixture<ApiFac
         var (id, targets) = await CreateNestedDiscussionAsync();
         var before = await StatementIdsAsync(id);
 
-        var created = await api.AddStatementAsync(id, new { kind = "supportGroup", parentId = targets[parent], groupType });
+        var created = await api.AddStatementAsync(id, new { kind = "supportGroup", parentId = targets[parent], name = "Nested group", groupType });
 
         AssertNewEmptyGroup(created, targets[parent], groupType, scenario);
         var read = await api.GetDiscussionAsync(id);
@@ -213,7 +213,7 @@ public class NestedGroupEndpointTests(ApiFactory factory) : IClassFixture<ApiFac
         for (var depth = 1; depth <= 3; depth++)
         {
             var groupType = depth % 2 == 0 ? "anySufficient" : "allRequired";
-            var created = await api.AddStatementAsync(id, new { kind = "supportGroup", parentId = parent, groupType });
+            var created = await api.AddStatementAsync(id, new { kind = "supportGroup", parentId = parent, name = $"Group at depth {depth}", groupType });
             AssertNewEmptyGroup(created, parent, groupType, $"depth {depth}");
             parent = Id(created);
             chain.Add(parent);
@@ -273,7 +273,7 @@ public class NestedGroupEndpointTests(ApiFactory factory) : IClassFixture<ApiFac
         var deepest = chain[^1].Id.ToString();
         Assert.Equal(alternating ? StatementKind.SupportingStatement : StatementKind.SupportGroup, chain[^1].Kind);
 
-        var created = await api.AddStatementAsync(id, new { kind = "supportGroup", parentId = deepest, groupType = "anySufficient" });
+        var created = await api.AddStatementAsync(id, new { kind = "supportGroup", parentId = deepest, name = "Deepest group", groupType = "anySufficient" });
 
         AssertNewEmptyGroup(created, deepest, "anySufficient", $"depth {levels + 1}");
         using var response = await api.Http.GetAsync($"{DiscussionsPath}/{id}");

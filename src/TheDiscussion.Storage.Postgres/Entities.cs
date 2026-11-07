@@ -45,6 +45,9 @@ internal sealed class StatementEntity
 
     public SupportGroupType? GroupType { get; set; }
 
+    /// <summary>A support group's name; <c>null</c> for other kinds and for groups stored before groups had names.</summary>
+    public string? Name { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? EditedAt { get; set; }
@@ -60,9 +63,10 @@ internal sealed class StatementEntity
         Kind = statement.Kind,
         Text = statement.Text,
         GroupType = statement.GroupType,
+        Name = statement.Name,
         CreatedAt = statement.CreatedAt,
         EditedAt = statement.EditedAt,
     };
 
-    public Statement ToStatement() => new(Id, DiscussionId, Kind, ParentId, Text, GroupType, CreatedAt, EditedAt);
+    public Statement ToStatement() => new(Id, DiscussionId, Kind, ParentId, Text, GroupType, CreatedAt, EditedAt, Name);
 }

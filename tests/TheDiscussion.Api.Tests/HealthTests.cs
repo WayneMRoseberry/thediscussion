@@ -77,6 +77,15 @@ public class HealthTests(ApiFactory factory) : IClassFixture<ApiFactory>
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task UpdateSupportGroupAsync(
+            Guid discussionId,
+            Guid statementId,
+            string? name,
+            SupportGroupType? groupType,
+            DateTimeOffset editedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task DeleteStatementAsync(Guid discussionId, Guid statementId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

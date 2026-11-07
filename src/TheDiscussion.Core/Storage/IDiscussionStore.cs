@@ -47,6 +47,22 @@ public interface IDiscussionStore
     /// <exception cref="StatementNotFoundException">The statement is not part of that discussion.</exception>
     Task UpdateStatementTextAsync(Guid discussionId, Guid statementId, string text, DateTimeOffset editedAt, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Changes a support group's name and/or group type and records when it was edited, as one atomic change (last write
+    /// wins). A <c>null</c> <paramref name="name"/> or <paramref name="groupType"/> leaves that value as it is; the edit
+    /// time is set either way. Kind, parent, creation time and children never change.
+    /// </summary>
+    /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
+    /// <exception cref="StatementNotFoundException">The statement is not part of that discussion.</exception>
+    /// <exception cref="InvalidOperationException">The statement is not a support group; nothing is changed.</exception>
+    Task UpdateSupportGroupAsync(
+        Guid discussionId,
+        Guid statementId,
+        string? name,
+        SupportGroupType? groupType,
+        DateTimeOffset editedAt,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Removes a statement and every statement beneath it, at any depth, in one atomic operation.</summary>
     /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
     /// <exception cref="StatementNotFoundException">The statement is not part of that discussion.</exception>

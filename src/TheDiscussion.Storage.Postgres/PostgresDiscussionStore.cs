@@ -168,6 +168,46 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
         }
     }
 
+    public async Task UpdateSupportGroupAsync(
+        Guid discussionId,
+        Guid statementId,
+        string? name,
+        SupportGroupType? groupType,
+        DateTimeOffset editedAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var group = await context.Statements
+            .SingleOrDefaultAsync(s => s.Id == statementId && s.DiscussionId == discussionId, cancellationToken)
+            ?? throw await NotFoundAsync(context, discussionId, statementId, cancellationToken);
+        if (group.Kind != StatementKind.SupportGroup)
+        {
+            throw new InvalidOperationException($"Statement '{statementId}' is not a support group.");
+        }
+
+        if (name is not null)
+        {
+            group.Name = name;
+        }
+
+        if (groupType is not null)
+        {
+            group.GroupType = groupType;
+        }
+
+        group.EditedAt = editedAt;
+        try
+        {
+            // One UPDATE of only the changed columns, so the name, the type and the edit time change together.
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The group (or its discussion) was deleted between the read above and the update.
+            throw await NotFoundAsync(context, discussionId, statementId, cancellationToken);
+        }
+    }
+
     public async Task DeleteStatementAsync(Guid discussionId, Guid statementId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);

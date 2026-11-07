@@ -8,10 +8,40 @@ namespace TheDiscussion.Core.Discussions;
 public sealed record NewDiscussion(string? Title, IReadOnlyList<string?>? TopicTags, string? Thesis);
 
 /// <summary>
-/// Input for a new statement. Field names in validation errors: <c>kind</c>, <c>parentId</c>, <c>text</c>, <c>groupType</c>.
-/// A <c>null</c> field means the client did not supply it.
+/// Input for a new statement. Field names in validation errors: <c>kind</c>, <c>parentId</c>, <c>text</c>, <c>groupType</c>,
+/// <c>name</c>. A <c>null</c> field means the client did not supply it. Support groups take a name and a group type and no
+/// text; every other kind takes text and neither a name nor a group type.
 /// </summary>
-public sealed record NewStatement(StatementKind? Kind, Guid? ParentId, string? Text, SupportGroupType? GroupType);
+public sealed record NewStatement(StatementKind? Kind, Guid? ParentId, string? Text, SupportGroupType? GroupType, string? Name = null);
+
+/// <summary>
+/// Changes to one statement (the statement <c>PATCH</c>). Each <c>…Sent</c> flag says whether the client sent the field
+/// at all, so an absent field can be told apart from one sent as <c>null</c>. <see cref="GroupType"/> is <c>null</c> when
+/// it was sent as <c>null</c> or as a value that is not a group type. Field names in validation errors: <c>kind</c>,
+/// <c>parentId</c>, <c>text</c>, <c>name</c>, <c>groupType</c>, <c>body</c>.
+/// </summary>
+public sealed record StatementChanges(
+    bool KindSent,
+    bool ParentIdSent,
+    bool TextSent,
+    string? Text,
+    bool NameSent,
+    string? Name,
+    bool GroupTypeSent,
+    SupportGroupType? GroupType)
+{
+    public static StatementChanges None { get; } = new(false, false, false, null, false, null, false, null);
+
+    public StatementChanges WithKind() => this with { KindSent = true };
+
+    public StatementChanges WithParentId() => this with { ParentIdSent = true };
+
+    public StatementChanges WithText(string? text) => this with { TextSent = true, Text = text };
+
+    public StatementChanges WithName(string? name) => this with { NameSent = true, Name = name };
+
+    public StatementChanges WithGroupType(SupportGroupType? groupType) => this with { GroupTypeSent = true, GroupType = groupType };
+}
 
 /// <summary>
 /// Changes to a discussion's details. Only the fields marked as sent are changed; a sent field is validated as on create.
@@ -194,39 +224,203 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
     /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
     /// <exception cref="StatementNotFoundException">The statement is not part of the discussion.</exception>
     /// <exception cref="DiscussionValidationException">The input is invalid; nothing is changed.</exception>
-    public async Task<(Statement Statement, DiscussionWithStatus Discussion)> EditStatementTextAsync(
+    public Task<(Statement Statement, DiscussionWithStatus Discussion)> EditStatementTextAsync(
         Guid discussionId,
         Guid statementId,
         string? text,
         ValidationErrors? formatErrors = null,
+        CancellationToken cancellationToken = default) =>
+        EditStatementAsync(discussionId, statementId, StatementChanges.None.WithText(text), formatErrors, cancellationToken);
+
+    /// <summary>
+    /// Edits a statement and marks it as edited (last write wins). A support group's <c>name</c> and/or <c>groupType</c>
+    /// can change (D-5); every other kind, including the thesis, can change its <c>text</c>. Kind and parent never change.
+    /// The checks run in this order (UC-3), and the first that fails rejects the request without changing anything:
+    /// <list type="number">
+    /// <item>unknown discussion or statement (not found);</item>
+    /// <item><c>kind</c> or <c>parentId</c> sent;</item>
+    /// <item>not a group: <c>name</c> or <c>groupType</c> sent, then the text checks;</item>
+    /// <item>a group: <c>text</c> sent;</item>
+    /// <item>a group: neither <c>name</c> nor <c>groupType</c> sent (field <c>body</c>);</item>
+    /// <item><c>name</c> sent but not 1 to <see cref="DiscussionRules.GroupNameMaxLength"/> characters after trimming;</item>
+    /// <item><c>name</c> not sent to a group that has no name, which would stay unnamed;</item>
+    /// <item><c>groupType</c> sent but not a group type (including <c>null</c>).</item>
+    /// </list>
+    /// A valid edit always saves and sets <see cref="Statement.EditedAt"/> once, even when a value is unchanged.
+    /// </summary>
+    /// <param name="discussionId">The discussion.</param>
+    /// <param name="statementId">The statement to edit.</param>
+    /// <param name="changes">The fields the client sent.</param>
+    /// <param name="formatErrors">
+    /// Errors the caller found while reading the request (a field of the wrong JSON type). They are reported when the
+    /// field's own check is reached, in the order above.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <returns>The edited statement and the discussion's status.</returns>
+    /// <exception cref="DiscussionNotFoundException">The discussion does not exist.</exception>
+    /// <exception cref="StatementNotFoundException">The statement is not part of the discussion.</exception>
+    /// <exception cref="DiscussionValidationException">The input is invalid; nothing is changed.</exception>
+    public async Task<(Statement Statement, DiscussionWithStatus Discussion)> EditStatementAsync(
+        Guid discussionId,
+        Guid statementId,
+        StatementChanges changes,
+        ValidationErrors? formatErrors = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(changes);
+
         var discussion = await store.GetDiscussionAsync(discussionId, cancellationToken)
             ?? throw new DiscussionNotFoundException(discussionId);
         var statement = discussion.Statements.FirstOrDefault(s => s.Id == statementId)
             ?? throw new StatementNotFoundException(discussionId, statementId);
 
-        var errors = formatErrors ?? new ValidationErrors();
-        string? trimmed = null;
-        if (statement.Kind == StatementKind.SupportGroup)
+        var format = formatErrors ?? new ValidationErrors();
+        var errors = new ValidationErrors();
+        if (changes.KindSent)
         {
-            errors.Add("text", "Support groups have no text to edit.");
+            errors.Add("kind", "A statement's kind never changes.");
         }
-        else if (!errors.Has("text"))
+
+        if (changes.ParentIdSent)
         {
-            trimmed = errors.RequireText("text", text, DiscussionRules.StatementTextMaxLength, "Text");
+            errors.Add("parentId", "A statement's parent never changes.");
         }
 
         ThrowIfInvalid(errors);
 
-        var edited = statement with { Text = trimmed, EditedAt = Now() };
-        await store.UpdateStatementTextAsync(discussionId, statementId, trimmed!, edited.EditedAt!.Value, cancellationToken);
+        Statement edited;
+        if (statement.Kind == StatementKind.SupportGroup)
+        {
+            var (name, groupType) = ValidateGroupChanges(statement, changes, format);
+            edited = statement with { Name = name ?? statement.Name, GroupType = groupType ?? statement.GroupType, EditedAt = Now() };
+            await store.UpdateSupportGroupAsync(discussionId, statementId, name, groupType, edited.EditedAt!.Value, cancellationToken);
+        }
+        else
+        {
+            var text = ValidateTextChanges(statement, changes, format);
+            edited = statement with { Text = text, EditedAt = Now() };
+            await store.UpdateStatementTextAsync(discussionId, statementId, text, edited.EditedAt!.Value, cancellationToken);
+        }
 
         var updated = discussion with
         {
             Statements = discussion.Statements.Select(s => s.Id == statementId ? edited : s).ToList(),
         };
         return (edited, WithStatus(updated));
+    }
+
+    /// <summary>The checks for a statement with text (UC-3 "Target is a group?" no). Returns the trimmed text.</summary>
+    private static string ValidateTextChanges(Statement statement, StatementChanges changes, ValidationErrors format)
+    {
+        var errors = new ValidationErrors();
+        if (changes.NameSent)
+        {
+            errors.Add("name", $"Only support groups have a name; {DiscussionRules.Describe(statement.Kind)} has text instead.");
+        }
+
+        if (changes.GroupTypeSent)
+        {
+            errors.Add("groupType", $"Only support groups have a group type; {DiscussionRules.Describe(statement.Kind)} has none.");
+        }
+
+        ThrowIfInvalid(errors);
+
+        string? text = null;
+        if (format.Has("text"))
+        {
+            CopyMessages(format, "text", errors);
+        }
+        else
+        {
+            text = errors.RequireText("text", changes.Text, DiscussionRules.StatementTextMaxLength, "Text");
+        }
+
+        ThrowIfInvalid(errors);
+        return text!;
+    }
+
+    /// <summary>
+    /// The checks for a support group, in UC-3 order. Returns the trimmed new name and the new group type; each is
+    /// <c>null</c> when it stays as it is.
+    /// </summary>
+    private static (string? Name, SupportGroupType? GroupType) ValidateGroupChanges(
+        Statement group,
+        StatementChanges changes,
+        ValidationErrors format)
+    {
+        var errors = new ValidationErrors();
+        if (changes.TextSent)
+        {
+            errors.Add("text", "Support groups have no text to edit; change their name or groupType instead.");
+            ThrowIfInvalid(errors);
+        }
+
+        if (!changes.NameSent && !changes.GroupTypeSent)
+        {
+            errors.Add("body", "Send at least one field to change on a support group: name or groupType.");
+            ThrowIfInvalid(errors);
+        }
+
+        string? name = null;
+        if (changes.NameSent)
+        {
+            name = format.Has("name") ? null : DiscussionRules.NormalizeGroupName(changes.Name);
+            if (name is null)
+            {
+                if (format.Has("name"))
+                {
+                    CopyMessages(format, "name", errors);
+                }
+                else
+                {
+                    AddGroupNameError(changes.Name, errors);
+                }
+
+                ThrowIfInvalid(errors);
+            }
+        }
+        else if (group.Name is null)
+        {
+            errors.Add(
+                "name",
+                $"This support group has no name yet; send a name of 1 to {DiscussionRules.GroupNameMaxLength} characters with the change.");
+            ThrowIfInvalid(errors);
+        }
+
+        if (changes.GroupTypeSent && changes.GroupType is null)
+        {
+            if (format.Has("groupType"))
+            {
+                CopyMessages(format, "groupType", errors);
+            }
+            else
+            {
+                errors.Add("groupType", "Group type must be 'allRequired' or 'anySufficient'.");
+            }
+
+            ThrowIfInvalid(errors);
+        }
+
+        return (name, changes.GroupType);
+    }
+
+    /// <summary>Records why <paramref name="value"/> is not a valid group name (see <see cref="DiscussionRules.NormalizeGroupName"/>).</summary>
+    private static void AddGroupNameError(string? value, ValidationErrors errors)
+    {
+        var trimmed = value?.Trim();
+        errors.Add(
+            "name",
+            string.IsNullOrEmpty(trimmed)
+                ? $"A support group needs a name of 1 to {DiscussionRules.GroupNameMaxLength} characters."
+                : $"Name must be at most {DiscussionRules.GroupNameMaxLength} characters (it has {trimmed.Length}).");
+    }
+
+    private static void CopyMessages(ValidationErrors from, string field, ValidationErrors to)
+    {
+        foreach (var message in from.MessagesFor(field))
+        {
+            to.Add(field, message);
+        }
     }
 
     /// <summary>Deletes a statement and every statement beneath it, at any depth. The thesis cannot be deleted on its own.</summary>
@@ -286,11 +480,21 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
         }
 
         string? text = null;
+        string? name = null;
         if (input.Kind == StatementKind.SupportGroup)
         {
             if (!string.IsNullOrWhiteSpace(input.Text))
             {
                 errors.Add("text", "Support groups have no text.");
+            }
+
+            if (!errors.Has("name"))
+            {
+                name = DiscussionRules.NormalizeGroupName(input.Name);
+                if (name is null)
+                {
+                    AddGroupNameError(input.Name, errors);
+                }
             }
 
             if (input.GroupType is null && !errors.Has("groupType"))
@@ -304,6 +508,11 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
             if (input.GroupType is not null && input.Kind is not null)
             {
                 errors.Add("groupType", "Only support groups have a group type.");
+            }
+
+            if (input.Name is not null && input.Kind is not null && !errors.Has("name"))
+            {
+                errors.Add("name", "Only support groups have a name.");
             }
         }
 
@@ -319,7 +528,8 @@ public sealed class DiscussionService(IDiscussionStore store, TimeProvider clock
             parent.Id,
             text,
             validKind == StatementKind.SupportGroup ? input.GroupType : null,
-            Now());
+            Now(),
+            Name: name);
     }
 
     /// <summary>1 to 5 distinct, well-formed tags (each trimmed). Every problem is reported under <c>topicTags</c>.</summary>
