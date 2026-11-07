@@ -25,10 +25,13 @@ public static partial class DiscussionRules
               && topicTag[parentTag.Length] == '.'
               && topicTag.StartsWith(parentTag, StringComparison.Ordinal);
 
-    /// <summary>The kinds of statement that a statement of <paramref name="kind"/> may be attached to.</summary>
+    /// <summary>
+    /// The kinds of statement that a statement of <paramref name="kind"/> may be attached to. Only the parent's own kind
+    /// matters, never its depth: support groups nest under groups and under supporting statements without limit (D-1, D-4).
+    /// </summary>
     public static IReadOnlyList<StatementKind> AllowedParentKinds(StatementKind kind) => kind switch
     {
-        StatementKind.SupportGroup => [StatementKind.Thesis],
+        StatementKind.SupportGroup => [StatementKind.Thesis, StatementKind.SupportGroup, StatementKind.SupportingStatement],
         StatementKind.SupportingStatement => [StatementKind.SupportGroup],
         StatementKind.Illustration => [StatementKind.Thesis, StatementKind.SupportingStatement],
         StatementKind.CounterArgument => [StatementKind.Thesis, StatementKind.SupportingStatement],

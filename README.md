@@ -103,7 +103,7 @@ Statement kinds and what they may target (`parentId`):
 
 | `kind` | Allowed parent | Notes |
 | --- | --- | --- |
-| `supportGroup` | the thesis | `groupType` is `allRequired` or `anySufficient`; no text |
+| `supportGroup` | the thesis, a support group or a supporting statement | any depth; `groupType` is `allRequired` or `anySufficient`; no text |
 | `supportingStatement` | a support group | |
 | `illustration` | the thesis or a supporting statement | never affects status; cannot be countered |
 | `counterArgument` | the thesis or a supporting statement | |
