@@ -119,6 +119,69 @@ public abstract class DiscussionStoreContract
     }
 
     [SkippableFact]
+    public async Task Groups_under_a_group_and_under_a_supporting_statement_are_read_back_in_creation_order()
+    {
+        // nested-named-groups AC-1: a group's parent may be another group (sub-group) or a supporting statement (sub-argument).
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Nested groups", "contract.nested-groups");
+        await store.CreateDiscussionAsync(discussion, thesis);
+
+        var topGroup = Group(discussion.Id, thesis.Id, SupportGroupType.AllRequired);
+        var support = Child(discussion.Id, StatementKind.SupportingStatement, topGroup.Id, "Top support");
+        var subGroup = Group(discussion.Id, topGroup.Id, SupportGroupType.AnySufficient);
+        var subArgument = Group(discussion.Id, support.Id, SupportGroupType.AllRequired);
+        var supportInSubArgument = Child(discussion.Id, StatementKind.SupportingStatement, subArgument.Id, "Sub-argument support");
+        var groupUnderSubArgumentSupport = Group(discussion.Id, supportInSubArgument.Id, SupportGroupType.AnySufficient);
+        var added = new[] { topGroup, support, subGroup, subArgument, supportInSubArgument, groupUnderSubArgumentSupport };
+
+        foreach (var statement in added)
+        {
+            await store.AddStatementAsync(statement);
+        }
+
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.NotNull(stored);
+        Assert.Equal([thesis, .. added], stored.Statements);
+        var readSubGroup = stored.Statements.Single(s => s.Id == subGroup.Id);
+        Assert.Equal((StatementKind.SupportGroup, topGroup.Id, SupportGroupType.AnySufficient), (readSubGroup.Kind, readSubGroup.ParentId!.Value, readSubGroup.GroupType!.Value));
+        var readSubArgument = stored.Statements.Single(s => s.Id == subArgument.Id);
+        Assert.Equal((StatementKind.SupportGroup, support.Id, SupportGroupType.AllRequired), (readSubArgument.Kind, readSubArgument.ParentId!.Value, readSubArgument.GroupType!.Value));
+        Assert.Equal(supportInSubArgument.Id, stored.Statements.Single(s => s.Id == groupUnderSubArgumentSupport.Id).ParentId);
+    }
+
+    [SkippableFact]
+    public async Task A_1000_level_alternating_group_and_support_chain_is_stored_and_read_back_complete()
+    {
+        // nested-named-groups Cluster C "Tree depth" (store and read only): no depth limit (D-4).
+        const int Levels = 1000;
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Deep chain", "contract.nested-groups.deep");
+        await store.CreateDiscussionAsync(discussion, thesis);
+
+        var chain = new List<Statement>(Levels);
+        var parentId = thesis.Id;
+        for (var depth = 1; depth <= Levels; depth++)
+        {
+            var statement = depth % 2 == 1
+                ? Group(discussion.Id, parentId, depth % 4 == 1 ? SupportGroupType.AllRequired : SupportGroupType.AnySufficient)
+                : Child(discussion.Id, StatementKind.SupportingStatement, parentId, $"Support at depth {depth}");
+            await store.AddStatementAsync(statement);
+            chain.Add(statement);
+            parentId = statement.Id;
+        }
+
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.NotNull(stored);
+        Assert.Equal([thesis, .. chain], stored.Statements);
+        for (var index = 1; index < stored.Statements.Count; index++)
+        {
+            Assert.Equal(stored.Statements[index - 1].Id, stored.Statements[index].ParentId);
+        }
+    }
+
+    [SkippableFact]
     public async Task Text_at_the_maximum_length_round_trips_unchanged()
     {
         var store = CreateStore();
@@ -463,8 +526,9 @@ public abstract class DiscussionStoreContract
             new Statement(Guid.NewGuid(), id, StatementKind.Thesis, null, title + " (thesis)", null, createdAt));
     }
 
-    protected static Statement Group(Guid discussionId, Guid thesisId, SupportGroupType type) =>
-        new(Guid.NewGuid(), discussionId, StatementKind.SupportGroup, thesisId, null, type, Now());
+    /// <summary>A support group under <paramref name="parentId"/>: the thesis, another group or a supporting statement.</summary>
+    protected static Statement Group(Guid discussionId, Guid parentId, SupportGroupType type) =>
+        new(Guid.NewGuid(), discussionId, StatementKind.SupportGroup, parentId, null, type, Now());
 
     protected static Statement Child(Guid discussionId, StatementKind kind, Guid parentId, string text) =>
         new(Guid.NewGuid(), discussionId, kind, parentId, text, null, Now());
