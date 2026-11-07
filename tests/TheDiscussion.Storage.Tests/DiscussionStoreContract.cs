@@ -425,6 +425,115 @@ public abstract class DiscussionStoreContract
         Assert.Equal([oneThesis], (await store.GetDiscussionAsync(one.Id))!.Statements);
     }
 
+    // ---- nested-named-groups AC-3 (UC-3, Cluster C "Storage provider"): group names ----
+
+    [SkippableFact]
+    public async Task Group_names_are_stored_and_read_back_unchanged_including_100_characters_and_Unicode()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Named groups", "contract.names");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var hundred = new string('n', DiscussionRules.GroupNameMaxLength);
+        var emoji = string.Concat(Enumerable.Repeat("\U0001F600", 50));
+        var groups = new[]
+        {
+            NamedGroup(discussion.Id, thesis.Id, SupportGroupType.AllRequired, "Productivity mechanisms"),
+            NamedGroup(discussion.Id, thesis.Id, SupportGroupType.AnySufficient, hundred),
+            NamedGroup(discussion.Id, thesis.Id, SupportGroupType.AllRequired, "Café Ölçüm 証拠 доказательство"),
+            NamedGroup(discussion.Id, thesis.Id, SupportGroupType.AnySufficient, emoji),
+        };
+        foreach (var group in groups)
+        {
+            await store.AddStatementAsync(group);
+        }
+
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.Equal([thesis, .. groups], stored!.Statements);
+        Assert.Equal(hundred, stored.Statements[2].Name);
+        Assert.Equal(100, stored.Statements[4].Name!.Length);
+        Assert.Null(stored.Statements[0].Name);
+    }
+
+    [SkippableFact]
+    public async Task A_group_stored_without_a_name_reads_back_with_a_null_name()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Unnamed group", "contract.names");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var unnamed = Group(discussion.Id, thesis.Id, SupportGroupType.AnySufficient);
+        await store.AddStatementAsync(unnamed);
+
+        var stored = (await store.GetDiscussionAsync(discussion.Id))!.Statements.Single(s => s.Id == unnamed.Id);
+
+        Assert.Null(stored.Name);
+        Assert.Equal(SupportGroupType.AnySufficient, stored.GroupType);
+        Assert.Equal(unnamed, stored);
+    }
+
+    [SkippableFact]
+    public async Task Updating_a_groups_name_type_or_both_is_persisted_with_edited_at_and_nothing_else_changes()
+    {
+        var store = CreateStore();
+        var (discussion, thesis) = NewDiscussion("Group edits", "contract.names");
+        await store.CreateDiscussionAsync(discussion, thesis);
+        var nameOnly = NamedGroup(discussion.Id, thesis.Id, SupportGroupType.AllRequired, "Name only");
+        var typeOnly = NamedGroup(discussion.Id, thesis.Id, SupportGroupType.AllRequired, "Type only");
+        var both = Group(discussion.Id, thesis.Id, SupportGroupType.AnySufficient);
+        var support = Child(discussion.Id, StatementKind.SupportingStatement, typeOnly.Id, "Support");
+        var untouched = NamedGroup(discussion.Id, support.Id, SupportGroupType.AnySufficient, "Untouched");
+        foreach (var statement in new[] { nameOnly, typeOnly, both, support, untouched })
+        {
+            await store.AddStatementAsync(statement);
+        }
+
+        var first = Now();
+        var second = first.AddSeconds(1);
+        await store.UpdateSupportGroupAsync(discussion.Id, nameOnly.Id, "Renamed", null, first);
+        await store.UpdateSupportGroupAsync(discussion.Id, typeOnly.Id, null, SupportGroupType.AnySufficient, first);
+        await store.UpdateSupportGroupAsync(discussion.Id, both.Id, "Named now", SupportGroupType.AllRequired, second);
+        var stored = await store.GetDiscussionAsync(discussion.Id);
+
+        Assert.Equal(
+            [
+                thesis,
+                nameOnly with { Name = "Renamed", EditedAt = first },
+                typeOnly with { GroupType = SupportGroupType.AnySufficient, EditedAt = first },
+                both with { Name = "Named now", GroupType = SupportGroupType.AllRequired, EditedAt = second },
+                support,
+                untouched,
+            ],
+            stored!.Statements);
+    }
+
+    [SkippableFact]
+    public async Task Updating_an_unknown_group_or_a_statement_that_is_not_a_group_throws_and_changes_nothing()
+    {
+        var store = CreateStore();
+        var (one, oneThesis) = NewDiscussion("One", "contract.names");
+        var (two, twoThesis) = NewDiscussion("Two", "contract.names");
+        await store.CreateDiscussionAsync(one, oneThesis);
+        await store.CreateDiscussionAsync(two, twoThesis);
+        var group = NamedGroup(one.Id, oneThesis.Id, SupportGroupType.AllRequired, "Group");
+        var counter = Child(one.Id, StatementKind.CounterArgument, oneThesis.Id, "Counter");
+        await store.AddStatementAsync(group);
+        await store.AddStatementAsync(counter);
+
+        await Assert.ThrowsAsync<DiscussionNotFoundException>(() =>
+            store.UpdateSupportGroupAsync(Guid.NewGuid(), group.Id, "Name", null, Now()));
+        await Assert.ThrowsAsync<StatementNotFoundException>(() =>
+            store.UpdateSupportGroupAsync(one.Id, Guid.NewGuid(), "Name", null, Now()));
+        await Assert.ThrowsAsync<StatementNotFoundException>(() =>
+            store.UpdateSupportGroupAsync(two.Id, group.Id, "Name", null, Now()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.UpdateSupportGroupAsync(one.Id, counter.Id, "Name", SupportGroupType.AnySufficient, Now()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.UpdateSupportGroupAsync(one.Id, oneThesis.Id, "Name", null, Now()));
+
+        Assert.Equal([oneThesis, group, counter], (await store.GetDiscussionAsync(one.Id))!.Statements);
+        Assert.Equal([twoThesis], (await store.GetDiscussionAsync(two.Id))!.Statements);
+    }
+
     [SkippableFact]
     public async Task Deleting_a_statement_removes_its_whole_subtree_and_leaves_the_rest_of_the_tree_intact()
     {
@@ -529,6 +638,10 @@ public abstract class DiscussionStoreContract
     /// <summary>A support group under <paramref name="parentId"/>: the thesis, another group or a supporting statement.</summary>
     protected static Statement Group(Guid discussionId, Guid parentId, SupportGroupType type) =>
         new(Guid.NewGuid(), discussionId, StatementKind.SupportGroup, parentId, null, type, Now());
+
+    /// <summary>A support group with a name, as the application tier stores new groups (nested-named-groups AC-3).</summary>
+    protected static Statement NamedGroup(Guid discussionId, Guid parentId, SupportGroupType type, string name) =>
+        Group(discussionId, parentId, type) with { Name = name };
 
     protected static Statement Child(Guid discussionId, StatementKind kind, Guid parentId, string text) =>
         new(Guid.NewGuid(), discussionId, kind, parentId, text, null, Now());
