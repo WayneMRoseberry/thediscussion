@@ -71,8 +71,8 @@ in local and test environments.
 | `GET /api/v1/discussions/{id}` | | 200 with the full tree and computed status, or 404 |
 | `PATCH /api/v1/discussions/{id}` | `{ title?, topicTags? }` | 200 with the updated discussion, 400, or 404. Only the fields sent change |
 | `DELETE /api/v1/discussions/{id}` | | 204 (the discussion and all its statements are removed), or 404 |
-| `POST /api/v1/discussions/{id}/statements` | `{ kind, parentId, text?, groupType? }` | 201 with the statement, 400, or 404 |
-| `PATCH /api/v1/discussions/{id}/statements/{statementId}` | `{ text }` | 200 with the statement (`editedAt` set), 400, or 404 |
+| `POST /api/v1/discussions/{id}/statements` | `{ kind, parentId, text?, name?, groupType? }` | 201 with the statement, 400, or 404 |
+| `PATCH /api/v1/discussions/{id}/statements/{statementId}` | `{ text }`, or `{ name?, groupType? }` for a support group | 200 with the statement (`editedAt` set), 400, or 404 |
 | `DELETE /api/v1/discussions/{id}/statements/{statementId}` | | 204 (the statement and everything beneath it are removed), 400 for the thesis, or 404 |
 | `GET /api/v1/topics` | | 200, the tag tree: `[{ tag, name, discussionCount, children }]` |
 | `GET /health` | | 200 (`storage.reachable: true`) or 503 |
@@ -99,11 +99,20 @@ at any depth, in one atomic operation; status is recomputed on the next read. Th
 deleted on its own (400 naming `statementId`): delete the discussion instead. Concurrent edits are
 last write wins; there is no edit history or undo.
 
+Support group names: every new group needs a `name` of 1–100 characters after trimming (counted in
+UTF-16 code units, so an emoji made of a surrogate pair counts as 2), or the request gets 400 naming
+`name`; other kinds take no `name`. Groups stored before names existed have `name: null`. A
+`PATCH` on a group sends `name` and/or `groupType` (at least one, otherwise 400 naming `body`) and
+sets `editedAt`, even when a value is unchanged; a type change can change status on the next read.
+It is rejected with 400 naming the field when it sends `text`, `kind` or `parentId`, an invalid
+`name` or `groupType`, or only a `groupType` to a group that has no name yet. Sending `name` or
+`groupType` to any other kind is rejected with 400 naming that field.
+
 Statement kinds and what they may target (`parentId`):
 
 | `kind` | Allowed parent | Notes |
 | --- | --- | --- |
-| `supportGroup` | the thesis, a support group or a supporting statement | any depth; `groupType` is `allRequired` or `anySufficient`; no text |
+| `supportGroup` | the thesis, a support group or a supporting statement | any depth; `name` (1–100 characters) and `groupType` (`allRequired` or `anySufficient`); no text |
 | `supportingStatement` | a support group | |
 | `illustration` | the thesis or a supporting statement | never affects status; cannot be countered |
 | `counterArgument` | the thesis or a supporting statement | |
