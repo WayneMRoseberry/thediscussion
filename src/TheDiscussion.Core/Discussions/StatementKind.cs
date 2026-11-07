@@ -6,7 +6,10 @@ public enum StatementKind
     /// <summary>The root point a discussion asserts. Exactly one per discussion.</summary>
     Thesis,
 
-    /// <summary>Groups supporting statements under the thesis; see <see cref="SupportGroupType"/>.</summary>
+    /// <summary>
+    /// Groups supporting statements and sub-groups. Sits under the thesis, another support group or a supporting
+    /// statement (a sub-argument), at any depth; see <see cref="SupportGroupType"/>.
+    /// </summary>
     SupportGroup,
 
     /// <summary>An argumentative statement inside a support group.</summary>

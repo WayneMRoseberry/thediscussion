@@ -161,7 +161,7 @@ public class DiscussionEndpointTests(ApiFactory factory) : IClassFixture<ApiFact
     [InlineData("rebuttal targeting the thesis", "rebuttal", "thesis", "Text", null, "parentId")]
     [InlineData("rebuttal targeting a supporting statement", "rebuttal", "support", "Text", null, "parentId")]
     [InlineData("supporting statement under the thesis", "supportingStatement", "thesis", "Text", null, "parentId")]
-    [InlineData("support group under a supporting statement", "supportGroup", "support", null, "allRequired", "parentId")]
+    [InlineData("support group under an illustration", "supportGroup", "illustration", null, "allRequired", "parentId")]
     [InlineData("counter targeting a support group", "counterArgument", "group", "Text", null, "parentId")]
     [InlineData("illustration targeting a counter", "illustration", "counter", "Text", null, "parentId")]
     [InlineData("support group without group type", "supportGroup", "thesis", null, null, "groupType")]
