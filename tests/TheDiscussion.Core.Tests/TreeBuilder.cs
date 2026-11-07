@@ -21,6 +21,15 @@ internal sealed class TreeBuilder
 
     public Statement AnySufficient() => AddGroup(SupportGroupType.AnySufficient);
 
+    /// <summary>Adds an all-required group under <paramref name="parent"/>: a group (sub-group) or a supporting statement (sub-argument).</summary>
+    public Statement AllRequired(Statement parent) => AddGroup(SupportGroupType.AllRequired, parent);
+
+    /// <summary>Adds an any-sufficient group under <paramref name="parent"/>: a group (sub-group) or a supporting statement (sub-argument).</summary>
+    public Statement AnySufficient(Statement parent) => AddGroup(SupportGroupType.AnySufficient, parent);
+
+    /// <summary>Adds a group of <paramref name="type"/> under <paramref name="parent"/>, or under the thesis when it is <c>null</c>.</summary>
+    public Statement Group(SupportGroupType type, Statement? parent = null) => AddGroup(type, parent);
+
     public Statement Support(Statement group, string text = "Support") => Add(StatementKind.SupportingStatement, group, text);
 
     public Statement Illustration(Statement target, string text = "Illustration") => Add(StatementKind.Illustration, target, text);
@@ -29,9 +38,9 @@ internal sealed class TreeBuilder
 
     public Statement Rebuttal(Statement target, string text = "Rebuttal") => Add(StatementKind.Rebuttal, target, text);
 
-    private Statement AddGroup(SupportGroupType type)
+    private Statement AddGroup(SupportGroupType type, Statement? parent = null)
     {
-        var group = new Statement(Guid.NewGuid(), discussionId, StatementKind.SupportGroup, Thesis.Id, null, type, DateTimeOffset.UnixEpoch);
+        var group = new Statement(Guid.NewGuid(), discussionId, StatementKind.SupportGroup, (parent ?? Thesis).Id, null, type, DateTimeOffset.UnixEpoch);
         statements.Add(group);
         return group;
     }
