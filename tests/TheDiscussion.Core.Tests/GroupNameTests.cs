@@ -223,17 +223,28 @@ public class GroupNameTests
     }
 
     [Fact]
-    public async Task A_format_error_found_by_the_caller_is_reported_when_its_field_is_checked()
+    public async Task A_read_error_found_by_the_caller_is_reported_when_its_field_is_checked()
     {
         var (id, thesis) = await CreateDiscussionAsync();
         var group = await AddGroupAsync(id, thesis, "Named", SupportGroupType.AllRequired);
-        var format = new ValidationErrors();
-        format.Add("name", "'name' has the wrong JSON type; send a string.");
 
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
-            service.EditStatementAsync(id, group.Id, StatementChanges.None.WithName(null), format));
+            service.EditStatementAsync(id, group.Id, StatementChanges.None.WithUnreadableName("'name' has the wrong JSON type; send a string.")));
 
+        Assert.True(error.Errors.Keys.SequenceEqual(["name"]), string.Join(", ", error.Errors.Keys));
         Assert.Equal(["'name' has the wrong JSON type; send a string."], error.Errors["name"]);
+    }
+
+    [Fact]
+    public async Task A_read_error_is_not_reported_when_an_earlier_check_fails()
+    {
+        var (id, thesis) = await CreateDiscussionAsync();
+        var group = await AddGroupAsync(id, thesis, "Named", SupportGroupType.AllRequired);
+        var changes = StatementChanges.None.WithText("Text").WithUnreadableName("'name' has the wrong JSON type; send a string.");
+
+        var error = await Assert.ThrowsAsync<DiscussionValidationException>(() => service.EditStatementAsync(id, group.Id, changes));
+
+        Assert.True(error.Errors.Keys.SequenceEqual(["text"]), string.Join(", ", error.Errors.Keys));
     }
 
     // ---- DiscussionService.EditStatementAsync on other kinds: UC-3 E5 ----
