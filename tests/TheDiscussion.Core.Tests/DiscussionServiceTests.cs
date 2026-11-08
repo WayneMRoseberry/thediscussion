@@ -85,7 +85,7 @@ public class DiscussionServiceTests
         var id = created.Discussion.Id;
         Assert.Equal(ThesisStatus.Unsupported, created.Status.Thesis);
 
-        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
+        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired, "Group"));
         var (support, afterSupport) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));
         Assert.Equal(ThesisStatus.Open, afterSupport.Status.Thesis);
 
@@ -113,7 +113,7 @@ public class DiscussionServiceTests
     {
         var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var id = created.Discussion.Id;
-        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
+        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired, "Group"));
         var (support, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));
         var (counter, before) = await service.AddStatementAsync(id, new NewStatement(StatementKind.CounterArgument, support.Id, "Counter", null));
 
@@ -136,7 +136,7 @@ public class DiscussionServiceTests
     {
         var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var (group, _) = await service.AddStatementAsync(
-            created.Discussion.Id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AnySufficient));
+            created.Discussion.Id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AnySufficient, "Group"));
 
         var error = await Assert.ThrowsAsync<DiscussionValidationException>(() =>
             service.EditStatementTextAsync(created.Discussion.Id, group.Id, "Text"));
@@ -161,7 +161,7 @@ public class DiscussionServiceTests
     {
         var created = await service.CreateDiscussionAsync(new NewDiscussion("Title", ["a.b"], "Thesis"));
         var id = created.Discussion.Id;
-        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired));
+        var (group, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportGroup, created.Discussion.Thesis.Id, null, SupportGroupType.AllRequired, "Group"));
         var (support, _) = await service.AddStatementAsync(id, new NewStatement(StatementKind.SupportingStatement, group.Id, "Support", null));
         var (counter, countered) = await service.AddStatementAsync(id, new NewStatement(StatementKind.CounterArgument, support.Id, "Counter", null));
         Assert.Equal(ThesisStatus.Countered, countered.Status.Thesis);

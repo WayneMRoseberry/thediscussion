@@ -7,9 +7,26 @@ public static partial class DiscussionRules
 {
     public const int TitleMaxLength = 200;
     public const int StatementTextMaxLength = 5000;
+
+    /// <summary>
+    /// Longest support group name, counted after trimming in UTF-16 code units (<see cref="string.Length"/>) like the
+    /// text limits, so an emoji made of a surrogate pair counts as 2.
+    /// </summary>
+    public const int GroupNameMaxLength = 100;
+
     public const int TopicTagMaxSegments = 5;
     public const int TopicTagsMin = 1;
     public const int TopicTagsMax = 5;
+
+    /// <summary>
+    /// The group name trimmed the same way statement text is, when it is valid: 1 to <see cref="GroupNameMaxLength"/>
+    /// characters after trimming. Returns <c>null</c> when the name is missing, empty, whitespace-only or too long.
+    /// </summary>
+    public static string? NormalizeGroupName(string? name)
+    {
+        var trimmed = name?.Trim();
+        return string.IsNullOrEmpty(trimmed) || trimmed.Length > GroupNameMaxLength ? null : trimmed;
+    }
 
     /// <summary>1–5 dot-separated lowercase segments of <c>[a-z0-9-]</c>, for example <c>work.remote</c>.</summary>
     public static bool IsValidTopicTag(string? topicTag) => topicTag is not null && TopicTagPattern().IsMatch(topicTag);

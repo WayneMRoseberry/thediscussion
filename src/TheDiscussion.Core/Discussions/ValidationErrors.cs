@@ -9,6 +9,9 @@ public sealed class ValidationErrors
 
     public bool Has(string field) => errors.ContainsKey(field);
 
+    /// <summary>The messages recorded for <paramref name="field"/>; empty when there are none.</summary>
+    public IReadOnlyList<string> MessagesFor(string field) => errors.TryGetValue(field, out var messages) ? messages : [];
+
     public void Add(string field, string message)
     {
         if (!errors.TryGetValue(field, out var messages))

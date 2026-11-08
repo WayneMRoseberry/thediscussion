@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using TheDiscussion.Api.Discussions;
 using TheDiscussion.Api.Health;
@@ -22,6 +23,13 @@ public static class DiscussionApi
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+
+            // Each resolver already in the chain gets the modifier; wrapping TypeInfoResolver itself would make the chain contain itself.
+            var resolvers = options.SerializerOptions.TypeInfoResolverChain;
+            for (var i = 0; i < resolvers.Count; i++)
+            {
+                resolvers[i] = resolvers[i].WithAddedModifier(StatementResponse.WriteNameOnlyForGroups);
+            }
         });
         builder.Services.AddHealthChecks()
             .AddCheck<StorageHealthCheck>("storage", timeout: TimeSpan.FromSeconds(5));

@@ -41,11 +41,22 @@ internal sealed class DiscussionApiClient(HttpClient http)
         return json;
     }
 
-    public async Task<string> AddAsync(string discussionId, string kind, string parentId, string? text = null, string? groupType = null)
+    /// <summary>Adds a statement and returns its id. Support groups get <paramref name="name"/>, or a default name when it is <c>null</c>.</summary>
+    public async Task<string> AddAsync(
+        string discussionId,
+        string kind,
+        string parentId,
+        string? text = null,
+        string? groupType = null,
+        string? name = null)
     {
-        var created = await AddStatementAsync(discussionId, new { kind, parentId, text, groupType });
+        name ??= kind == "supportGroup" ? DefaultGroupName : null;
+        var created = await AddStatementAsync(discussionId, new { kind, parentId, text, groupType, name });
         return created.GetProperty("id").GetString()!;
     }
+
+    /// <summary>The name <see cref="AddAsync"/> gives a support group when the test does not care about it.</summary>
+    public const string DefaultGroupName = "Test group";
 
     public Task<HttpResponseMessage> PatchDiscussionAsync(string discussionId, object body) =>
         Http.PatchAsJsonAsync($"{DiscussionsPath}/{discussionId}", body);

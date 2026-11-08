@@ -57,6 +57,7 @@ public sealed class DiscussionDbContext(DbContextOptions<DiscussionDbContext> op
             statement.Property(s => s.Kind).HasColumnName("kind").HasConversion<string>().HasMaxLength(32);
             statement.Property(s => s.Text).HasColumnName("text").HasMaxLength(5000);
             statement.Property(s => s.GroupType).HasColumnName("group_type").HasConversion<string>().HasMaxLength(32);
+            statement.Property(s => s.Name).HasColumnName("name").HasMaxLength(DiscussionRules.GroupNameMaxLength);
             statement.Property(s => s.CreatedAt).HasColumnName("created_at");
             statement.Property(s => s.EditedAt).HasColumnName("edited_at");
             statement.Property(s => s.Sequence).HasColumnName("sequence").UseIdentityAlwaysColumn();

@@ -155,6 +155,40 @@ public sealed class InMemoryDiscussionStore : IDiscussionStore
         return Task.CompletedTask;
     }
 
+    public Task UpdateSupportGroupAsync(
+        Guid discussionId,
+        Guid statementId,
+        string? name,
+        SupportGroupType? groupType,
+        DateTimeOffset editedAt,
+        CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            var stored = Find(discussionId);
+            var index = stored.Statements.FindIndex(statement => statement.Id == statementId);
+            if (index < 0)
+            {
+                throw new StatementNotFoundException(discussionId, statementId);
+            }
+
+            var group = stored.Statements[index];
+            if (group.Kind != StatementKind.SupportGroup)
+            {
+                throw new InvalidOperationException($"Statement '{statementId}' is not a support group.");
+            }
+
+            stored.Statements[index] = group with
+            {
+                Name = name ?? group.Name,
+                GroupType = groupType ?? group.GroupType,
+                EditedAt = editedAt,
+            };
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task DeleteStatementAsync(Guid discussionId, Guid statementId, CancellationToken cancellationToken = default)
     {
         lock (gate)
