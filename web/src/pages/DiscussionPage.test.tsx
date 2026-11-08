@@ -73,11 +73,11 @@ describe('DiscussionPage', () => {
     expect(within(breadcrumb).getByText('Remote work boosts productivity')).toHaveAttribute('aria-current', 'page');
 
     expect(lineText('t')).toBe('[THESIS] Remote work boosts productivity Status: COUNTERED');
-    expect(lineText('g1')).toBe('+ Support group: ALL REQUIRED (does not hold)');
+    expect(lineText('g1')).toBe('+ ALL REQUIRED: Productivity mechanisms (does not hold)');
     expect(lineText('s1')).toBe('[SUPPORT] Fewer interruptions (countered)');
     expect(lineText('c1')).toBe('x [COUNTER] Slack pings replace them (unrefuted)');
     expect(lineText('s2')).toBe('[SUPPORT] No commute saves energy (standing)');
-    expect(lineText('g2')).toBe('+ Support group: ANY SUFFICIENT (holds)');
+    expect(lineText('g2')).toBe('+ ANY SUFFICIENT: Evidence (holds)');
     expect(lineText('s3')).toBe('[SUPPORT] Studies show +13% output (standing)');
     expect(lineText('i1')).toBe('[ILLUSTRATION] e.g. my team shipped early');
     expect(lineText('c2')).toBe('x [COUNTER] Collaboration suffers (refuted)');
@@ -191,7 +191,7 @@ describe('DiscussionPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add support' }));
     const groupTargets = within(screen.getByRole('form', { name: 'Add supporting statement' })).getAllByRole('option');
-    expect(groupTargets.map((option) => option.textContent)).toEqual(['Support group 1: ALL REQUIRED', 'Support group 2: ANY SUFFICIENT']);
+    expect(groupTargets.map((option) => option.textContent)).toEqual(['ALL REQUIRED: Productivity mechanisms', 'ANY SUFFICIENT: Evidence']);
 
     await user.click(screen.getByRole('button', { name: 'Add illustration' }));
     const illustrationTargets = within(screen.getByRole('form', { name: 'Add illustration' })).getAllByRole('option');

@@ -382,6 +382,23 @@ a.topic-tag {
   color: var(--muted);
 }
 
+/* Below the nesting limit, deeper statements are one flat list, indented by depth (inline margin) */
+.outline-flat > li {
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--line);
+}
+
+/* Support group rows: "ALL REQUIRED: <name>"; a group stored before names shows "Unnamed group" and "Add a name" */
+.group-name {
+  font-weight: 600;
+}
+
+.group-name--unnamed {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .edit-form {
   margin: 0.5rem 0;
   padding: 0.75rem 1rem;
