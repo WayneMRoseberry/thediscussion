@@ -471,6 +471,33 @@ public class GroupNameEndpointTests(ApiFactory factory) : IClassFixture<ApiFacto
         Assert.Equal(secondEditedAt, Statement(await api.GetDiscussionAsync(id), group).GetProperty("editedAt").GetDateTimeOffset());
     }
 
+    [Fact]
+    public async Task A_rejected_patch_keeps_the_editedAt_of_an_earlier_edit()
+    {
+        var (id, thesis) = await CreateDiscussionAsync();
+        var group = await api.AddAsync(id, "supportGroup", thesis, groupType: "allRequired", name: "First");
+        using var first = await api.PatchStatementAsync(id, group, new { name = "Second" });
+        var editedAt = (await ReadOkAsync(first)).GetProperty("editedAt").GetDateTimeOffset();
+        var before = await RawDiscussionAsync(id);
+
+        foreach (var (json, field) in new[]
+        {
+            ("""{ "name": "   " }""", "name"),
+            ("""{ "groupType": "bogus" }""", "groupType"),
+            ("""{ "text": "No text on groups" }""", "text"),
+            ("{ }", "body"),
+        })
+        {
+            using var rejected = await PatchRawAsync(id, group, json);
+            await AssertValidationProblemAsync(rejected, field, json);
+        }
+
+        Assert.Equal(before, await RawDiscussionAsync(id));
+        var stored = Statement(await api.GetDiscussionAsync(id), group);
+        Assert.Equal(editedAt, stored.GetProperty("editedAt").GetDateTimeOffset());
+        Assert.Equal("Second", stored.GetProperty("name").GetString());
+    }
+
     [Theory]
     [InlineData("the same name", """{ "name": "Same" }""")]
     [InlineData("the same name with surrounding spaces", """{ "name": "  Same  " }""")]
