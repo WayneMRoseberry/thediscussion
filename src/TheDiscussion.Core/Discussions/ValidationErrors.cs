@@ -1,16 +1,15 @@
 namespace TheDiscussion.Core.Discussions;
 
-/// <summary>Collects validation messages keyed by request field name (the API's camelCase JSON names).</summary>
+/// <summary>
+/// Collects validation messages keyed by request field name (one of <see cref="RequestFields"/>). It only builds the
+/// error response: a field the caller could not read reaches the service on the input record (its <c>…ReadError</c>),
+/// not as an entry here.
+/// </summary>
 public sealed class ValidationErrors
 {
     private readonly Dictionary<string, List<string>> errors = new(StringComparer.Ordinal);
 
     public bool IsEmpty => errors.Count == 0;
-
-    public bool Has(string field) => errors.ContainsKey(field);
-
-    /// <summary>The messages recorded for <paramref name="field"/>; empty when there are none.</summary>
-    public IReadOnlyList<string> MessagesFor(string field) => errors.TryGetValue(field, out var messages) ? messages : [];
 
     public void Add(string field, string message)
     {

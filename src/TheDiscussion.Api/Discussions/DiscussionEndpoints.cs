@@ -50,21 +50,24 @@ internal static class DiscussionEndpoints
             return error;
         }
 
-        var formatErrors = new ValidationErrors();
         var changes = DiscussionChanges.None;
-        if (TryGetField(body, "title", out var title) && TryReadString(title, "title", formatErrors, out var titleText))
+        if (TryGetField(body, RequestFields.Title, out var title))
         {
-            changes = changes.WithTitle(titleText);
+            changes = TryReadString(title, out var titleText)
+                ? changes.WithTitle(titleText)
+                : changes.WithUnreadableTitle(WrongTypeMessage(RequestFields.Title));
         }
 
-        if (TryGetField(body, "topicTags", out var topicTags) && TryReadStringArray(topicTags, "topicTags", formatErrors, out var topicTagList))
+        if (TryGetField(body, RequestFields.TopicTags, out var topicTags))
         {
-            changes = changes.WithTopicTags(topicTagList);
+            changes = TryReadStringArray(topicTags, out var topicTagList)
+                ? changes.WithTopicTags(topicTagList)
+                : changes.WithUnreadableTopicTags(WrongTypeMessage(RequestFields.TopicTags));
         }
 
         try
         {
-            var updated = await service.UpdateDiscussionAsync(id, changes, formatErrors, cancellationToken);
+            var updated = await service.UpdateDiscussionAsync(id, changes, cancellationToken);
             return TypedResults.Ok(DiscussionResponse.From(updated));
         }
         catch (DiscussionNotFoundException)
@@ -103,45 +106,54 @@ internal static class DiscussionEndpoints
             return error;
         }
 
-        // Only record what was sent here; the service decides, in the UC-3 order, which field to report.
-        var formatErrors = new ValidationErrors();
+        // Only record what was sent (and what could not be read) here; the service decides, in the UC-3 order, which
+        // field to report.
         var changes = StatementChanges.None;
-        if (TryGetField(body, "kind", out _))
+        if (TryGetField(body, RequestFields.Kind, out _))
         {
             changes = changes.WithKind();
         }
 
-        if (TryGetField(body, "parentId", out _))
+        if (TryGetField(body, RequestFields.ParentId, out _))
         {
             changes = changes.WithParentId();
         }
 
-        if (TryGetField(body, "text", out var textValue))
+        if (TryGetField(body, RequestFields.Text, out var textValue))
         {
-            TryReadString(textValue, "text", formatErrors, out var text);
-            changes = changes.WithText(text);
+            changes = TryReadString(textValue, out var text)
+                ? changes.WithText(text)
+                : changes.WithUnreadableText(WrongTypeMessage(RequestFields.Text));
         }
 
-        if (TryGetField(body, "name", out var nameValue))
+        if (TryGetField(body, RequestFields.Name, out var nameValue))
         {
-            TryReadString(nameValue, "name", formatErrors, out var name);
-            changes = changes.WithName(name);
+            changes = TryReadString(nameValue, out var name)
+                ? changes.WithName(name)
+                : changes.WithUnreadableName(WrongTypeMessage(RequestFields.Name));
         }
 
-        if (TryGetField(body, "groupType", out var groupTypeValue))
+        if (TryGetField(body, RequestFields.GroupType, out var groupTypeValue))
         {
-            SupportGroupType? groupType = null;
-            if (TryReadString(groupTypeValue, "groupType", formatErrors, out var groupTypeName) && groupTypeName is not null)
+            if (!TryReadString(groupTypeValue, out var groupTypeName))
             {
-                groupType = ParseGroupType(groupTypeName, formatErrors);
+                changes = changes.WithUnreadableGroupType(WrongTypeMessage(RequestFields.GroupType));
             }
-
-            changes = changes.WithGroupType(groupType);
+            else if (groupTypeName is null)
+            {
+                changes = changes.WithGroupType(null);
+            }
+            else
+            {
+                changes = TryParseGroupType(groupTypeName, out var groupType)
+                    ? changes.WithGroupType(groupType)
+                    : changes.WithUnreadableGroupType(UnknownGroupTypeMessage);
+            }
         }
 
         try
         {
-            var (statement, discussion) = await service.EditStatementAsync(id, statementId, changes, formatErrors, cancellationToken);
+            var (statement, discussion) = await service.EditStatementAsync(id, statementId, changes, cancellationToken);
             return TypedResults.Ok(StatementResponse.From(statement, discussion.Status));
         }
         catch (DiscussionNotFoundException)
@@ -189,7 +201,7 @@ internal static class DiscussionEndpoints
             {
                 if (tags.Count != 1)
                 {
-                    return Invalid(new Dictionary<string, string[]> { ["tag"] = ["Send one tag."] });
+                    return Invalid(new Dictionary<string, string[]> { [RequestFields.Tag] = ["Send one tag."] });
                 }
 
                 discussions = await service.ListDiscussionsUnderTagAsync(tags[0], cancellationToken);
@@ -249,12 +261,11 @@ internal static class DiscussionEndpoints
             return error;
         }
 
-        var formatErrors = new ValidationErrors();
-        var input = Parse(body!, formatErrors);
+        var input = Parse(body!);
 
         try
         {
-            var (statement, discussion) = await service.AddStatementAsync(id, input, formatErrors, cancellationToken);
+            var (statement, discussion) = await service.AddStatementAsync(id, input, cancellationToken);
             return TypedResults.Created($"{BasePath}/{id}", StatementResponse.From(statement, discussion.Status));
         }
         catch (DiscussionNotFoundException)
@@ -267,10 +278,15 @@ internal static class DiscussionEndpoints
         }
     }
 
-    /// <summary>Turns wire values into domain values, recording a field error for each value that cannot be read.</summary>
-    private static NewStatement Parse(AddStatementRequest body, ValidationErrors errors)
+    private static readonly string UnknownKindMessage = $"Kind must be one of: {string.Join(", ", KindNames.Keys)}.";
+
+    private static readonly string UnknownGroupTypeMessage = $"Group type must be one of: {string.Join(", ", GroupTypeNames.Keys)}.";
+
+    /// <summary>Turns wire values into domain values, recording a read error for each value that cannot be read.</summary>
+    private static NewStatement Parse(AddStatementRequest body)
     {
         StatementKind? kind = null;
+        string? kindReadError = null;
         if (!string.IsNullOrWhiteSpace(body.Kind))
         {
             if (KindNames.TryGetValue(body.Kind.Trim(), out var parsedKind))
@@ -279,11 +295,12 @@ internal static class DiscussionEndpoints
             }
             else
             {
-                errors.Add("kind", $"Kind must be one of: {string.Join(", ", KindNames.Keys)}.");
+                kindReadError = UnknownKindMessage;
             }
         }
 
         Guid? parentId = null;
+        string? parentIdReadError = null;
         if (!string.IsNullOrWhiteSpace(body.ParentId))
         {
             if (Guid.TryParse(body.ParentId.Trim(), out var parsedParent))
@@ -292,30 +309,35 @@ internal static class DiscussionEndpoints
             }
             else
             {
-                errors.Add("parentId", "Parent id must be a statement id (a GUID).");
+                parentIdReadError = "Parent id must be a statement id (a GUID).";
             }
         }
 
         SupportGroupType? groupType = null;
+        string? groupTypeReadError = null;
         if (!string.IsNullOrWhiteSpace(body.GroupType))
         {
-            groupType = ParseGroupType(body.GroupType, errors);
+            if (TryParseGroupType(body.GroupType, out var parsedGroupType))
+            {
+                groupType = parsedGroupType;
+            }
+            else
+            {
+                groupTypeReadError = UnknownGroupTypeMessage;
+            }
         }
 
-        return new NewStatement(kind, parentId, body.Text, groupType, body.Name);
-    }
-
-    /// <summary>A group type name, matched case-insensitively after trimming; anything else records a <c>groupType</c> error.</summary>
-    private static SupportGroupType? ParseGroupType(string value, ValidationErrors errors)
-    {
-        if (GroupTypeNames.TryGetValue(value.Trim(), out var groupType))
+        return new NewStatement(kind, parentId, body.Text, groupType, body.Name)
         {
-            return groupType;
-        }
-
-        errors.Add("groupType", $"Group type must be one of: {string.Join(", ", GroupTypeNames.Keys)}.");
-        return null;
+            KindReadError = kindReadError,
+            ParentIdReadError = parentIdReadError,
+            GroupTypeReadError = groupTypeReadError,
+        };
     }
+
+    /// <summary>A group type name, matched case-insensitively after trimming.</summary>
+    private static bool TryParseGroupType(string value, out SupportGroupType groupType) =>
+        GroupTypeNames.TryGetValue(value.Trim(), out groupType);
 
     /// <summary>Reads a JSON object body. Malformed JSON yields a 400 naming the offending field (or <c>body</c>).</summary>
     private static async Task<(T? Body, IResult? Error)> ReadJsonAsync<T>(
@@ -333,14 +355,14 @@ internal static class DiscussionEndpoints
         {
             var body = await request.ReadFromJsonAsync<T>(options, cancellationToken);
             return body is null
-                ? (null, Invalid(new Dictionary<string, string[]> { ["body"] = ["A JSON object body is required."] }))
+                ? (null, Invalid(new Dictionary<string, string[]> { [RequestFields.Body] = ["A JSON object body is required."] }))
                 : (body, null);
         }
         catch (JsonException malformed)
         {
             // A syntax error (wrapped reader exception) concerns the whole body; otherwise a field had the wrong type.
-            var field = malformed.InnerException is JsonException ? "body" : FieldFromJsonPath(malformed.Path);
-            var message = field == "body"
+            var field = malformed.InnerException is JsonException ? RequestFields.Body : FieldFromJsonPath(malformed.Path);
+            var message = field == RequestFields.Body
                 ? "The request body is not a valid JSON object."
                 : WrongTypeMessage(field);
             return (null, Invalid(new Dictionary<string, string[]> { [field] = [message] }));
@@ -362,11 +384,11 @@ internal static class DiscussionEndpoints
             using var document = await JsonDocument.ParseAsync(request.Body, cancellationToken: cancellationToken);
             return document.RootElement.ValueKind == JsonValueKind.Object
                 ? (document.RootElement.Clone(), null)
-                : (default, Invalid(new Dictionary<string, string[]> { ["body"] = ["A JSON object body is required."] }));
+                : (default, Invalid(new Dictionary<string, string[]> { [RequestFields.Body] = ["A JSON object body is required."] }));
         }
         catch (JsonException)
         {
-            return (default, Invalid(new Dictionary<string, string[]> { ["body"] = ["The request body is not a valid JSON object."] }));
+            return (default, Invalid(new Dictionary<string, string[]> { [RequestFields.Body] = ["The request body is not a valid JSON object."] }));
         }
     }
 
@@ -386,8 +408,8 @@ internal static class DiscussionEndpoints
         return false;
     }
 
-    /// <summary>Reads a string or null field; any other JSON type records an error for the field and returns <c>false</c>.</summary>
-    private static bool TryReadString(JsonElement value, string field, ValidationErrors errors, out string? text)
+    /// <summary>Reads a string or null field; any other JSON type returns <c>false</c>.</summary>
+    private static bool TryReadString(JsonElement value, out string? text)
     {
         switch (value.ValueKind)
         {
@@ -398,14 +420,13 @@ internal static class DiscussionEndpoints
                 text = null;
                 return true;
             default:
-                errors.Add(field, WrongTypeMessage(field));
                 text = null;
                 return false;
         }
     }
 
-    /// <summary>Reads an array of strings (or null); any other JSON type records an error for the field and returns <c>false</c>.</summary>
-    private static bool TryReadStringArray(JsonElement value, string field, ValidationErrors errors, out IReadOnlyList<string?>? items)
+    /// <summary>Reads an array of strings (or null); any other JSON type returns <c>false</c>.</summary>
+    private static bool TryReadStringArray(JsonElement value, out IReadOnlyList<string?>? items)
     {
         items = null;
         if (value.ValueKind == JsonValueKind.Null)
@@ -416,7 +437,6 @@ internal static class DiscussionEndpoints
         if (value.ValueKind != JsonValueKind.Array
             || value.EnumerateArray().Any(item => item.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)))
         {
-            errors.Add(field, WrongTypeMessage(field));
             return false;
         }
 
@@ -425,7 +445,7 @@ internal static class DiscussionEndpoints
     }
 
     private static string WrongTypeMessage(string field) =>
-        field == "topicTags"
+        field == RequestFields.TopicTags
             ? $"'{field}' has the wrong JSON type; send an array of strings, for example [\"work.remote\"]."
             : $"'{field}' has the wrong JSON type; send a string.";
 
@@ -439,11 +459,11 @@ internal static class DiscussionEndpoints
     {
         if (string.IsNullOrEmpty(path) || !path.StartsWith("$.", StringComparison.Ordinal))
         {
-            return "body";
+            return RequestFields.Body;
         }
 
         var field = path[2..].Split('.', '[')[0];
-        return field.Length == 0 ? "body" : JsonNamingPolicy.CamelCase.ConvertName(field);
+        return field.Length == 0 ? RequestFields.Body : JsonNamingPolicy.CamelCase.ConvertName(field);
     }
 
     private static IResult Invalid(IDictionary<string, string[]> errors) =>
