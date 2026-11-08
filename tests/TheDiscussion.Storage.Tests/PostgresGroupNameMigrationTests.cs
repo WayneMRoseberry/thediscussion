@@ -107,8 +107,10 @@ public sealed class PostgresGroupNameMigrationTests(UnmigratedPostgresDatabaseFi
         async Task<Guid> InsertAsync(Guid discussion, Guid? parentId, string kind, string? text, string? groupType, DateTimeOffset? edited = null)
         {
             var id = Guid.NewGuid();
+
+            // The casts give a null parameter (no parent, no text, no edit) its column's type whatever type it is sent with.
             await context.Database.ExecuteSqlInterpolatedAsync(
-                $"INSERT INTO statements (id, discussion_id, parent_id, kind, text, group_type, created_at, edited_at) VALUES ({id}, {discussion}, {parentId}, {kind}, {text}, {groupType}, {createdAt}, {edited})");
+                $"INSERT INTO statements (id, discussion_id, parent_id, kind, text, group_type, created_at, edited_at) VALUES ({id}, {discussion}, CAST({parentId} AS uuid), {kind}, CAST({text} AS varchar), CAST({groupType} AS varchar), {createdAt}, CAST({edited} AS timestamptz))");
             if (discussion == discussionId)
             {
                 ids.Add(id);
