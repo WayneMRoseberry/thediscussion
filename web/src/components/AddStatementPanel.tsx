@@ -1,8 +1,9 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { addStatement, ApiError } from '../api/client';
-import type { AddableKind, Discussion, Statement, SupportGroupType } from '../api/types';
-import { allowedParentKinds, describeStatement, groupTypeLabels, kindNames } from '../outline/outline';
+import type { AddableKind, AddStatementInput, Discussion, Statement, SupportGroupType } from '../api/types';
+import { allowedParentKinds, describeStatement, kindNames } from '../outline/outline';
 import { Field } from './Field';
+import { GroupTypeField } from './GroupTypeField';
 
 const addableKinds: { kind: AddableKind; button: string }[] = [
   { kind: 'supportGroup', button: 'Add support group' },
@@ -28,6 +29,15 @@ const missingTargetHints: Record<AddableKind, string> = {
   rebuttal: 'Add a counter argument first.',
 };
 
+/** Fields shown next to their own control; any other field error goes in the form-level alert. */
+const fieldsShownInline: Record<AddableKind, string[]> = {
+  supportGroup: ['parentId', 'name', 'groupType'],
+  supportingStatement: ['parentId', 'text'],
+  illustration: ['parentId', 'text'],
+  counterArgument: ['parentId', 'text'],
+  rebuttal: ['parentId', 'text'],
+};
+
 interface AddStatementPanelProps {
   discussion: Discussion;
   /** Called after the API accepted a statement, with a message to announce, so the page can reload the outline and statuses. */
@@ -38,6 +48,7 @@ interface AddStatementPanelProps {
 export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProps) {
   const [activeKind, setActiveKind] = useState<AddableKind | null>(null);
   const formId = useId();
+  const buttons = useRef(new Map<AddableKind, HTMLButtonElement>());
 
   return (
     <section className="add-panel" aria-labelledby={`${formId}-heading`}>
@@ -46,6 +57,10 @@ export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProp
         {addableKinds.map(({ kind, button }) => (
           <button
             key={kind}
+            ref={(element) => {
+              if (element) buttons.current.set(kind, element);
+              else buttons.current.delete(kind);
+            }}
             type="button"
             className={`add-button${activeKind === kind ? ' add-button--active' : ''}`}
             aria-expanded={activeKind === kind}
@@ -65,7 +80,11 @@ export function AddStatementPanel({ discussion, onAdded }: AddStatementPanelProp
           id={formId}
           kind={activeKind}
           discussion={discussion}
-          onCancel={() => setActiveKind(null)}
+          onCancel={() => {
+            setActiveKind(null);
+            // The form goes away with the Cancel button; return focus to the button that opened it.
+            buttons.current.get(activeKind)?.focus();
+          }}
           onAdded={() => {
             setActiveKind(null);
             onAdded(`Added the ${kindNames[activeKind]}.`);
@@ -88,6 +107,7 @@ function AddStatementForm({ id, kind, discussion, onCancel, onAdded }: AddStatem
   const targets = discussion.statements.filter((statement) => allowedParentKinds[kind].includes(statement.kind));
   const [parentId, setParentId] = useState(targets[0]?.id ?? '');
   const [text, setText] = useState('');
+  const [groupName, setGroupName] = useState('');
   const [groupType, setGroupType] = useState<SupportGroupType>('allRequired');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -95,25 +115,29 @@ function AddStatementForm({ id, kind, discussion, onCancel, onAdded }: AddStatem
   const name = kindNames[kind];
   const headingId = `${id}-title`;
   const targetErrorId = `${id}-target-error`;
-  const groupErrorId = `${id}-group-error`;
   const targetError = error?.fieldError('parentId');
-  const groupError = error?.fieldError('groupType');
   const otherFieldErrors = error
     ? Object.entries(error.fieldErrors)
-        .filter(([field]) => !['parentId', 'groupType', 'text'].includes(field))
+        .filter(([field]) => !fieldsShownInline[kind].includes(field))
         .flatMap(([, messages]) => messages)
     : [];
   const formError = error && (Object.keys(error.fieldErrors).length === 0 ? error.message : otherFieldErrors.join(' '));
+  const labels = pickerLabels(targets);
+
+  function input(): AddStatementInput {
+    if (kind !== 'supportGroup') {
+      return { kind, parentId, text };
+    }
+    // An empty name is left out; the API rejects a group without a name and names the field.
+    return { kind, parentId, ...(groupName !== '' ? { name: groupName } : {}), groupType };
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      await addStatement(
-        discussion.id,
-        kind === 'supportGroup' ? { kind, parentId, groupType } : { kind, parentId, text },
-      );
+      await addStatement(discussion.id, input());
       onAdded();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught : new ApiError(0, 'Something went wrong. Try again.'));
@@ -145,7 +169,7 @@ function AddStatementForm({ id, kind, discussion, onCancel, onAdded }: AddStatem
           >
             {targets.map((target) => (
               <option key={target.id} value={target.id}>
-                {targetLabel(target, discussion.statements)}
+                {labels.get(target.id)}
               </option>
             ))}
           </select>
@@ -159,30 +183,24 @@ function AddStatementForm({ id, kind, discussion, onCancel, onAdded }: AddStatem
       </div>
 
       {kind === 'supportGroup' ? (
-        <fieldset
-          className={`field${groupError ? ' field--invalid' : ''}`}
-          aria-describedby={groupError ? groupErrorId : undefined}
-        >
-          <legend>Group type</legend>
-          {(['allRequired', 'anySufficient'] as const).map((type) => (
-            <label key={type} className="radio">
-              <input
-                type="radio"
-                name={`${id}-group-type`}
-                value={type}
-                checked={groupType === type}
-                onChange={() => setGroupType(type)}
-              />{' '}
-              {type === 'allRequired' ? 'All required: every support must stand' : 'Any sufficient: one standing support is enough'}
-              <span className="visually-hidden"> ({groupTypeLabels[type]})</span>
-            </label>
-          ))}
-          {groupError && (
-            <p id={groupErrorId} className="field-error">
-              {groupError}
-            </p>
-          )}
-        </fieldset>
+        <>
+          <Field
+            id={`${id}-name`}
+            label="Name"
+            value={groupName}
+            onChange={setGroupName}
+            error={error?.fieldError('name')}
+            hint="Required. Up to 100 characters."
+            disabled={submitting}
+          />
+          <GroupTypeField
+            id={`${id}-group-type`}
+            value={groupType}
+            onChange={setGroupType}
+            error={error?.fieldError('groupType')}
+            disabled={submitting}
+          />
+        </>
       ) : (
         <Field
           id={`${id}-text`}
@@ -208,11 +226,15 @@ function AddStatementForm({ id, kind, discussion, onCancel, onAdded }: AddStatem
   );
 }
 
-function targetLabel(target: Statement, statements: Statement[]): string {
-  if (target.kind !== 'supportGroup') {
-    return describeStatement(target);
-  }
-  const groups = statements.filter((statement) => statement.kind === 'supportGroup');
-  const number = groups.findIndex((group) => group.id === target.id) + 1;
-  return `Support group ${number}: ${target.groupType ? groupTypeLabels[target.groupType] : ''}`;
+/** Picker labels by statement id. Labels that would repeat (two unnamed groups of one type) get a number: "(2)". */
+function pickerLabels(targets: Statement[]): Map<string, string> {
+  const seen = new Map<string, number>();
+  const labels = new Map<string, string>();
+  targets.forEach((target) => {
+    const label = describeStatement(target);
+    const count = (seen.get(label) ?? 0) + 1;
+    seen.set(label, count);
+    labels.set(target.id, count === 1 ? label : `${label} (${count})`);
+  });
+  return labels;
 }

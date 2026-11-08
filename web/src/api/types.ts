@@ -32,8 +32,13 @@ export interface Statement {
   text?: string;
   /** Present on support groups. */
   groupType?: SupportGroupType;
+  /**
+   * Present on support groups (the API leaves it out for every other kind): 1 to 100 characters, or null for a group
+   * stored before groups had names.
+   */
+  name?: string | null;
   createdAt: string;
-  /** When the text was last edited; null until the first edit. */
+  /** When the text (or a group's name or type) was last edited; null until the first edit. */
   editedAt: string | null;
   /** Present on supporting statements. */
   stands?: boolean;
@@ -66,6 +71,14 @@ export interface AddStatementInput {
   kind: AddableKind;
   parentId: string;
   text?: string;
+  /** Support groups only: required by the API, 1 to 100 characters after trimming. */
+  name?: string;
+  groupType?: SupportGroupType;
+}
+
+/** PATCH body for a support group: only the fields sent change, and a group never takes text. */
+export interface UpdateGroupInput {
+  name?: string;
   groupType?: SupportGroupType;
 }
 

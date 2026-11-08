@@ -57,11 +57,12 @@ describe('Editing and deleting statements', () => {
 
     for (const statement of referenceDiscussion().statements) {
       const controls = within(row(statement.id)).queryAllByRole('button').map((button) => button.textContent!.split(' ')[0]);
-      const expected = [...(statement.kind === 'supportGroup' ? [] : ['Edit']), ...(statement.kind === 'thesis' ? [] : ['Delete'])];
+      // AC-4: group rows now offer Edit too (for the name and type).
+      const expected = ['Edit', ...(statement.kind === 'thesis' ? [] : ['Delete'])];
       expect(controls, statement.id).toEqual(expected);
     }
     expect(within(row('c1')).getByRole('button', { name: 'Edit counter argument: Slack pings replace them' })).toBeInTheDocument();
-    expect(within(row('g1')).getByRole('button', { name: 'Delete support group (ALL REQUIRED)' })).toBeInTheDocument();
+    expect(within(row('g1')).getByRole('button', { name: 'Delete support group (ALL REQUIRED: Productivity mechanisms)' })).toBeInTheDocument();
   });
 
   it('marks edited statements', async () => {
@@ -209,7 +210,7 @@ describe('Editing and deleting statements', () => {
     await waitFor(() => expect(within(outlineItem('t')).getByText('TESTED')).toBeInTheDocument());
     expect(document.querySelector('[data-statement-id="c1"]')).toBeNull();
     expect(lineText('s1')).toBe('[SUPPORT] Fewer interruptions (standing)');
-    expect(lineText('g1')).toBe('+ Support group: ALL REQUIRED (holds)');
+    expect(lineText('g1')).toBe('+ ALL REQUIRED: Productivity mechanisms (holds)');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Deleted the counter argument.');
     expect(calls(fetchMock, 'DELETE')).toHaveLength(1);

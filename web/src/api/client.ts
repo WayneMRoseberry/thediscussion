@@ -6,6 +6,7 @@ import type {
   ProblemDetails,
   TopicNode,
   UpdateDiscussionInput,
+  UpdateGroupInput,
   Statement,
 } from './types';
 
@@ -114,6 +115,15 @@ export function addStatement(discussionId: string, input: AddStatementInput): Pr
 /** Replaces a statement's text; the server sets `editedAt`. */
 export function updateStatement(discussionId: string, statementId: string, text: string): Promise<Statement> {
   return request<Statement>(statementPath(discussionId, statementId), { method: 'PATCH', body: JSON.stringify({ text }) });
+}
+
+/** Changes a support group's name and/or type, and never its text; the server sets `editedAt`. */
+export function updateGroup(discussionId: string, groupId: string, changes: UpdateGroupInput): Promise<Statement> {
+  const body: UpdateGroupInput = {
+    ...(changes.name !== undefined ? { name: changes.name } : {}),
+    ...(changes.groupType !== undefined ? { groupType: changes.groupType } : {}),
+  };
+  return request<Statement>(statementPath(discussionId, groupId), { method: 'PATCH', body: JSON.stringify(body) });
 }
 
 /** Deletes the statement and everything beneath it. */

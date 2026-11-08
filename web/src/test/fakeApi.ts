@@ -65,15 +65,89 @@ export function referenceDiscussion(): Discussion {
     thesisId: 't',
     statements: [
       statement({ id: 't', kind: 'thesis', text: 'Remote work boosts productivity' }),
-      statement({ id: 'g1', kind: 'supportGroup', parentId: 't', groupType: 'allRequired', holds: false }),
+      statement({ id: 'g1', kind: 'supportGroup', parentId: 't', groupType: 'allRequired', name: 'Productivity mechanisms', holds: false }),
       statement({ id: 's1', kind: 'supportingStatement', parentId: 'g1', text: 'Fewer interruptions', stands: false }),
       statement({ id: 'c1', kind: 'counterArgument', parentId: 's1', text: 'Slack pings replace them', refuted: false }),
       statement({ id: 's2', kind: 'supportingStatement', parentId: 'g1', text: 'No commute saves energy', stands: true }),
-      statement({ id: 'g2', kind: 'supportGroup', parentId: 't', groupType: 'anySufficient', holds: true }),
+      statement({ id: 'g2', kind: 'supportGroup', parentId: 't', groupType: 'anySufficient', name: 'Evidence', holds: true }),
       statement({ id: 's3', kind: 'supportingStatement', parentId: 'g2', text: 'Studies show +13% output', stands: true }),
       statement({ id: 'i1', kind: 'illustration', parentId: 's3', text: 'e.g. my team shipped early' }),
       statement({ id: 'c2', kind: 'counterArgument', parentId: 't', text: 'Collaboration suffers', refuted: true }),
       statement({ id: 'r1', kind: 'rebuttal', parentId: 'c2', text: 'Async docs offset this', refuted: false }),
     ],
+  };
+}
+
+/**
+ * Nested and named groups, following the AC-4 outline reference. Three levels of groups (g1 > g2 > g3), a sub-argument
+ * group under a supporting statement (g4 under s4), and a group stored before groups had names (g5, `name: null`).
+ * Markers: g1, g2 and g4 hold, g5 does not hold, and g3 is empty (no `holds`).
+ *
+ * ```
+ * [THESIS] Remote work boosts productivity
+ *   + ALL REQUIRED: Productivity mechanisms             g1
+ *       [SUPPORT] Fewer interruptions                   s1
+ *       + ANY SUFFICIENT: Evidence                      g2
+ *           [SUPPORT] Studies show +13% output          s2
+ *           [SUPPORT] Survey of 500 managers            s3
+ *              x [COUNTER] Self-reported data           c1
+ *           + ALL REQUIRED: Replicated studies          g3 (empty)
+ *       [SUPPORT] No commute saves energy               s4
+ *          + ALL REQUIRED: Why commuting drains energy  g4
+ *              [SUPPORT] Average commute is 54 minutes  s5
+ *   + ANY SUFFICIENT: Unnamed group  [Add a name]       g5
+ *       [SUPPORT] Flexible hours                        s6
+ *          x [COUNTER] Hours blur into evenings         c2
+ * ```
+ */
+export function nestedDiscussion(): Discussion {
+  return {
+    id: 'd1',
+    title: 'Remote work boosts productivity',
+    topicTags: ['work.remote'],
+    createdAt: created,
+    status: 'tested',
+    thesisId: 't',
+    statements: [
+      statement({ id: 't', kind: 'thesis', text: 'Remote work boosts productivity' }),
+      statement({ id: 'g1', kind: 'supportGroup', parentId: 't', groupType: 'allRequired', name: 'Productivity mechanisms', holds: true }),
+      statement({ id: 's1', kind: 'supportingStatement', parentId: 'g1', text: 'Fewer interruptions', stands: true }),
+      statement({ id: 'g2', kind: 'supportGroup', parentId: 'g1', groupType: 'anySufficient', name: 'Evidence', holds: true }),
+      statement({ id: 's2', kind: 'supportingStatement', parentId: 'g2', text: 'Studies show +13% output', stands: true }),
+      statement({ id: 's3', kind: 'supportingStatement', parentId: 'g2', text: 'Survey of 500 managers', stands: false }),
+      statement({ id: 'c1', kind: 'counterArgument', parentId: 's3', text: 'Self-reported data', refuted: false }),
+      statement({ id: 'g3', kind: 'supportGroup', parentId: 'g2', groupType: 'allRequired', name: 'Replicated studies' }),
+      statement({ id: 's4', kind: 'supportingStatement', parentId: 'g1', text: 'No commute saves energy', stands: true }),
+      statement({ id: 'g4', kind: 'supportGroup', parentId: 's4', groupType: 'allRequired', name: 'Why commuting drains energy', holds: true }),
+      statement({ id: 's5', kind: 'supportingStatement', parentId: 'g4', text: 'Average commute is 54 minutes', stands: true }),
+      statement({ id: 'g5', kind: 'supportGroup', parentId: 't', groupType: 'anySufficient', name: null, holds: false }),
+      statement({ id: 's6', kind: 'supportingStatement', parentId: 'g5', text: 'Flexible hours', stands: false }),
+      statement({ id: 'c2', kind: 'counterArgument', parentId: 's6', text: 'Hours blur into evenings', refuted: false }),
+    ],
+  };
+}
+
+/** A thesis with a chain of `depth` groups, each nested in the one before (ids g1 to g<depth>). */
+export function deepGroupDiscussion(depth: number): Discussion {
+  const statements: Statement[] = [statement({ id: 't', kind: 'thesis', text: 'Deep thesis' })];
+  for (let level = 1; level <= depth; level += 1) {
+    statements.push(
+      statement({
+        id: `g${level}`,
+        kind: 'supportGroup',
+        parentId: level === 1 ? 't' : `g${level - 1}`,
+        groupType: level % 2 === 0 ? 'anySufficient' : 'allRequired',
+        name: `Level ${level}`,
+      }),
+    );
+  }
+  return {
+    id: 'd1',
+    title: 'Deep discussion',
+    topicTags: ['work'],
+    createdAt: created,
+    status: 'unsupported',
+    thesisId: 't',
+    statements,
   };
 }
