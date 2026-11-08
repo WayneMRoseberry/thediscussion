@@ -220,13 +220,26 @@ public sealed class PostgresDiscussionStore(IDbContextFactory<DiscussionDbContex
             throw new InvalidOperationException("The thesis cannot be deleted on its own; delete the discussion instead.");
         }
 
-        // One DELETE of the target; the self-referencing foreign key cascades to the whole subtree within the same
-        // statement, so the delete is atomic. The kind filter keeps the thesis safe even if the row changed meanwhile.
+        // One SQL statement, so the delete is atomic: a recursive CTE collects the target and its whole subtree, at any
+        // depth, and a single DELETE removes all of it. Deleting only the target and leaving the rest to the
+        // self-referencing ON DELETE CASCADE would fire one nested cascade per level, which PostgreSQL runs recursively
+        // on its own stack, so a deep enough tree could fail with "stack depth limit exceeded". Here the cascade still
+        // fires but finds nothing left beneath any row. The kind filter keeps the thesis safe even if the row changed
+        // meanwhile; UNION (not UNION ALL) would stop even on a malformed parent cycle.
+        var thesisKind = nameof(StatementKind.Thesis);
         var deleted = kind is null
             ? 0
-            : await context.Statements
-                .Where(s => s.Id == statementId && s.DiscussionId == discussionId && s.Kind != StatementKind.Thesis)
-                .ExecuteDeleteAsync(cancellationToken);
+            : await context.Database.ExecuteSqlAsync(
+                $"""
+                WITH RECURSIVE subtree (id) AS (
+                    SELECT id FROM statements
+                    WHERE id = {statementId} AND discussion_id = {discussionId} AND kind <> {thesisKind}
+                    UNION
+                    SELECT child.id FROM statements AS child JOIN subtree ON child.parent_id = subtree.id
+                )
+                DELETE FROM statements WHERE id IN (SELECT id FROM subtree)
+                """,
+                cancellationToken);
         if (deleted == 0)
         {
             throw await NotFoundAsync(context, discussionId, statementId, cancellationToken);
