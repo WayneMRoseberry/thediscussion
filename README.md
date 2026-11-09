@@ -125,12 +125,18 @@ and non-empty support groups carry `holds`. Status is computed on every read by
 `ArgumentStatusEngine` in the core project and is never stored:
 
 - A counter argument or rebuttal is *refuted* when at least one rebuttal targeting it is not itself refuted.
-- A supporting statement *stands* when no unrefuted counter argument targets it.
-- An `allRequired` group holds when all its supporting statements stand; an `anySufficient` group
-  holds when at least one does. Empty groups are ignored.
-- Thesis: **unsupported** without supporting statements; otherwise **countered** when an unrefuted
-  counter argument targets the thesis or a non-empty group does not hold; otherwise **tested** when
-  any counter argument exists; otherwise **open**.
+- A group's *members* are its supporting statements and its non-empty sub-groups. A group with no
+  members is *empty*, applied recursively, so a group holding only empty sub-groups is empty. Empty
+  groups are ignored and carry no `holds`.
+- An `allRequired` group *holds* when every member stands or holds; an `anySufficient` group holds
+  when at least one member does.
+- A supporting statement *stands* when no unrefuted counter argument targets it and every non-empty
+  support group directly beneath it (its sub-arguments) holds.
+- Illustrations never affect status.
+- Thesis: **unsupported** when every group directly under it is empty (including when there are
+  none); otherwise **countered** when an unrefuted counter argument targets the thesis or a non-empty
+  group directly under it does not hold; otherwise **tested** when any counter argument exists
+  anywhere; otherwise **open**.
 
 ## Run the front end
 
@@ -155,8 +161,8 @@ API first.
    **+ Add rebuttal** to build the argument. After each add, the outline and statuses refresh.
 5. Edit or delete as you go. The discussion header has **Edit** (title and tags, in place) and
    **Delete** (the whole discussion; you return to the list). Each outline row has **Edit** for
-   statements with text, which edits the text in place, and **Delete** for every statement except the
-   thesis. Each delete asks for confirmation first and says how many statements beneath the target
+   statements with text, which edits the text in place, and for support groups, which edits the
+   group's name and type in place, and **Delete** for every statement except the thesis. Each delete asks for confirmation first and says how many statements beneath the target
    go with it, for example "Delete this counter argument and 3 statements beneath it?". Edited
    statements show *(edited)*. After each edit or delete, the outline and statuses refresh.
 6. Browse by topic: every tag (`#work.remote`) links to its tag page, and **Browse discussions by
@@ -165,9 +171,12 @@ API first.
    sub-topics with counts, and the discussions at or under the tag.
 
 The discussion view is an indented outline: the thesis with its status badge (UNSUPPORTED, OPEN,
-COUNTERED or TESTED), support groups labelled ALL REQUIRED or ANY SUFFICIENT, and each statement
-labelled with its kind and its marker (standing/countered for supporting statements,
-refuted/unrefuted for counter arguments and rebuttals).
+COUNTERED or TESTED), support groups labelled with their type and name (for example
+`ALL REQUIRED: Productivity mechanisms`) and indented under their parent group or supporting
+statement, and each statement labelled with its kind and its marker (holds/does not hold/empty for
+support groups, standing/countered for supporting statements, refuted/unrefuted for counter
+arguments and rebuttals). A group stored before names existed shows "Unnamed group" with an
+**Add a name** button.
 
 ## Tests
 
