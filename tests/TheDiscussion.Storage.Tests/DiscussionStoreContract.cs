@@ -8,7 +8,7 @@ namespace TheDiscussion.Storage.Tests;
 /// Each provider gets a concrete subclass; the tests themselves live here so all providers run the same suite.
 /// Tests only rely on data they create (random ids), so they can share one database.
 /// </summary>
-public abstract class DiscussionStoreContract
+public abstract partial class DiscussionStoreContract
 {
     /// <summary>Returns the store under test, or skips the test (with a reason) when the provider is unavailable.</summary>
     protected abstract IDiscussionStore CreateStore();
